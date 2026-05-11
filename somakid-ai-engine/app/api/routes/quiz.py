@@ -36,8 +36,6 @@ def _get_groq_client():
     return Groq(api_key=key)
 
 
-# ─── Schemas ──────────────────────────────────────────────────────────────
-
 class VoiceQuizRequest(BaseModel):
     audio_base64: str = Field(min_length=100)
     langue: str = Field(default="fr")
@@ -45,8 +43,6 @@ class VoiceQuizRequest(BaseModel):
     level: int = Field(default=1, ge=1, le=5)
     session_id: Optional[str] = Field(default=None)
 
-
-# ─── TTS helpers ──────────────────────────────────────────────────────────
 
 async def _edge_tts(text: str, langue: str) -> bytes:
     import edge_tts
@@ -84,17 +80,9 @@ async def _tts(text: str, langue: str) -> bytes:
         return await _gtts_fallback(text, langue)
 
 
-# ─── Routes ───────────────────────────────────────────────────────────────
-
 @router.post("/voice-quiz")
 @limiter.limit("20/minute")
 async def voice_quiz(request: Request, body: VoiceQuizRequest):
-    """
-    Voice quiz:
-    1. Groq Whisper transcription
-    2. Answer interpretation (A/B/C/D)
-    3. TTS confirmation in the correct language
-    """
     try:
         groq_client = _get_groq_client()
     except AIServiceException as e:
@@ -105,13 +93,11 @@ async def voice_quiz(request: Request, body: VoiceQuizRequest):
         )
 
     try:
-        # ── Decode audio ──────────────────────────────────────────────────
         audio_data = body.audio_base64
         if "base64," in audio_data:
             audio_data = audio_data.split("base64,")[1]
         audio_bytes = base64.b64decode(audio_data)
 
-        # ── Whisper transcription ─────────────────────────────────────────
         tmp = tempfile.NamedTemporaryFile(suffix=".m4a", delete=False)
         tmp.write(audio_bytes)
         tmp.close()
@@ -139,7 +125,6 @@ async def voice_quiz(request: Request, body: VoiceQuizRequest):
                 "data": {"audio_base64": "", "transcription": ""},
             })
 
-        # ── Interpret answer ──────────────────────────────────────────────
         answer_map = {
             "a": 0, "b": 1, "c": 2, "d": 3,
             "1": 0, "2": 1, "3": 2, "4": 3,
@@ -148,7 +133,6 @@ async def voice_quiz(request: Request, body: VoiceQuizRequest):
         first_word = child_answer.split()[0] if child_answer.split() else ""
         chosen = answer_map.get(first_word[:1], -1)
 
-        # Use multilingual prompt helper
         response_text = get_voice_quiz_response(
             language=body.langue,
             chosen_letter=first_word[:1].upper() if chosen >= 0 else "",
@@ -156,7 +140,6 @@ async def voice_quiz(request: Request, body: VoiceQuizRequest):
             is_valid=(chosen >= 0),
         )
 
-        # ── Voice synthesis ───────────────────────────────────────────────
         try:
             audio_mp3 = await _tts(response_text, body.langue)
             audio_b64 = base64.b64encode(audio_mp3).decode("utf-8")
@@ -189,10 +172,6 @@ async def generate_quiz_question(
     body: GenerationQuizRequete,
     quiz_service: QuizService = Depends(get_quiz_service),
 ):
-    """
-    Generate a new quiz question.
-    The question language is determined by body.langue.
-    """
     try:
         question = await quiz_service.generate_question(
             subject=body.sujet,
@@ -202,7 +181,6 @@ async def generate_quiz_question(
         )
         data = question.model_dump()
 
-        # Generate audio for question + options
         option_texts = " ".join(
             f"Option {label} : {text}"
             for label, text in zip(["A", "B", "C", "D"], question.options)
@@ -237,6 +215,7 @@ async def submit_quiz_answer(
             session_id=body.identifiant_session,
             child_id=body.identifiant_enfant,
             response_time_ms=body.temps_reponse_ms,
+            language=body.langue,
         )
         return JSONResponse(content={"success": True, "data": result.model_dump()})
     except ValidationException as e:
