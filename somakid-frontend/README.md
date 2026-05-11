@@ -221,7 +221,7 @@ The `assets/images/` directory should contain the following image files:
 
 ## License
 
-MIT License — See [LICENSE](LICENSE) file for details.
+MIT License — See [LICENSE](https://github.com/pacomeissa/SomaKid/blob/main/LICENSE) file for details.
 
 ---
 

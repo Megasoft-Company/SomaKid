@@ -285,7 +285,7 @@ The project follows Clean Code Architecture principles with a clear separation o
 
 ## License
 
-MIT License — See [LICENSE](LICENSE) file for details.
+MIT License — See [LICENSE](https://github.com/pacomeissa/SomaKid/blob/main/LICENSE) file for details.
 
 ---
 
