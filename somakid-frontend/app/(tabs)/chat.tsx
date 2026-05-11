@@ -1,8 +1,7 @@
 /**
- * SOMAKID AI - Chat Screen (Professional UI/UX - Green Theme)
+ * SOMAKID AI - Chat Screen
  * Voice-first interface with persistent memory, elegant animations.
- * Respects charte graphique with green primary color matching dashboard.
- * Full i18n integration with instant language switching.
+ * Full i18n integration with dynamic language detection sent to AI Engine.
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
@@ -20,18 +19,17 @@ import { takePhoto, pickFromGallery } from '../../utils/media';
 import { aiEngineClient } from '../../services/api/client';
 import { useChatStore } from '../../store/chat.store';
 import { useTranslation } from '../../hooks/useTranslation';
+import { getCurrentLanguage } from '../../i18n';
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../constants/theme';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-// ─── Constantes ──────────────────────────────────────────────────────────────
 const STORAGE_VOICE_HISTORY_KEY = 'somakid_voice_history';
 const STORAGE_SESSION_ID_KEY = 'somakid_voice_session_id';
 const MAX_LOCAL_MESSAGES = 100;
 const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 68;
 const BOTTOM_SAFE_AREA = Platform.OS === 'android' ? 24 : 0;
 
-// ─── Identifiant de session persistant ───────────────────────────────────────
 async function getOrCreateSessionId(): Promise<string> {
   try {
     const stored = await AsyncStorage.getItem(STORAGE_SESSION_ID_KEY);
@@ -44,7 +42,6 @@ async function getOrCreateSessionId(): Promise<string> {
   }
 }
 
-// ─── Lecture / écriture de l'historique local ─────────────────────────────────
 async function loadLocalHistory(): Promise<Message[]> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_VOICE_HISTORY_KEY);
@@ -65,7 +62,6 @@ async function saveLocalHistory(messages: Message[]): Promise<void> {
   }
 }
 
-// ─── Lecteur audio ───────────────────────────────────────────────────────────
 async function playAudioDirect(base64: string): Promise<void> {
   if (!base64 || base64.length < 100) return;
   const uri = `data:audio/mp3;base64,${base64}`;
@@ -90,7 +86,6 @@ async function playAudioDirect(base64: string): Promise<void> {
   }
 }
 
-// ─── Types ───────────────────────────────────────────────────────────────────
 type AppState = 'idle' | 'listening' | 'thinking' | 'speaking';
 type Mode = 'voice' | 'text' | 'camera';
 
@@ -102,7 +97,6 @@ interface Message {
   timestamp?: number;
 }
 
-// ─── SVG Icons ───────────────────────────────────────────────────────────────
 function SomaIcon({ size = 22, color = '#fff' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -169,7 +163,6 @@ function OrbPulse({ active, color }: { active: boolean; color: string }) {
   );
 }
 
-// ─── Composant SoundBars ──────────────────────────────────────────────────────
 function SoundBars() {
   const bars = useRef(Array.from({ length: 5 }, () => new Animated.Value(0.3))).current;
   useEffect(() => {
@@ -195,7 +188,6 @@ const sb = StyleSheet.create({
   bar: { width: 4, height: 36, borderRadius: 3, backgroundColor: '#fff', opacity: 0.92 },
 });
 
-// ─── Composant Bubble ─────────────────────────────────────────────────────────
 function Bubble({ msg, t }: { msg: Message; t: (key: string) => string }) {
   const isUser = msg.role === 'user';
   const anim = useRef(new Animated.Value(0)).current;
@@ -228,7 +220,6 @@ function Bubble({ msg, t }: { msg: Message; t: (key: string) => string }) {
   );
 }
 
-// ─── Composant TypingIndicator ────────────────────────────────────────────────
 function TypingIndicator({ t }: { t: (key: string) => string }) {
   const dots = useRef([0, 1, 2].map(() => new Animated.Value(0))).current;
   useEffect(() => {
@@ -266,7 +257,6 @@ function TypingIndicator({ t }: { t: (key: string) => string }) {
   );
 }
 
-// ─── Écran principal ──────────────────────────────────────────────────────────
 export default function ChatScreen() {
   const { t } = useTranslation();
   const [appState, setAppState] = useState<AppState>('idle');
@@ -288,7 +278,6 @@ export default function ChatScreen() {
   const sendImage = useChatStore((s) => s.sendImage);
   const sendMessage = useChatStore((s) => s.sendMessage);
 
-  // ── Initialisation ────────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
       const sid = await getOrCreateSessionId();
@@ -304,7 +293,6 @@ export default function ChatScreen() {
     })();
   }, []);
 
-  // ── Auto-scroll quand les messages changent ───────────────────────────────
   useEffect(() => {
     if (messages.length > 0) {
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
@@ -325,7 +313,6 @@ export default function ChatScreen() {
   const isThinking = mode === 'voice' ? appState === 'thinking' : storeSending;
   const hasMsgs = displayMessages.length > 0;
 
-  // ── Ajouter un message local et sauvegarder ───────────────────────────────
   const addLocalMessage = useCallback(
     async (role: Message['role'], text: string, uri?: string) => {
       const msg: Message = {
@@ -344,7 +331,6 @@ export default function ChatScreen() {
     [],
   );
 
-  // ── Pipeline voix ─────────────────────────────────────────────────────────
   const handleVoicePress = useCallback(async () => {
     if (appState === 'speaking') return;
 
@@ -358,11 +344,17 @@ export default function ChatScreen() {
       const b64 = await audioFileToBase64(uri);
       if (!b64 || b64.length < 100) { setAppState('idle'); return; }
 
+      const userLanguage = getCurrentLanguage();
+
       try {
         abortRef.current = new AbortController();
         const res = await aiEngineClient.post(
           '/chat/voice-chat',
-          { audio_base64: b64, langue: 'fr', identifiant_session: sessionId },
+          {
+            audio_base64: b64,
+            langue: userLanguage,
+            identifiant_session: sessionId,
+          },
           { signal: abortRef.current.signal },
         );
         const data = res.data?.data ?? {};
@@ -393,21 +385,21 @@ export default function ChatScreen() {
     if (started) setAppState('listening');
   }, [appState, sessionId, addLocalMessage, t]);
 
-  // ── Envoi texte ───────────────────────────────────────────────────────────
   const handleTextSend = useCallback(async () => {
     const msg = textInput.trim();
     if (!msg) return;
     setTextInput('');
-    await sendMessage(msg, 'fr');
+    const userLanguage = getCurrentLanguage();
+    await sendMessage(msg, userLanguage as any);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 120);
   }, [textInput, sendMessage]);
 
-  // ── Caméra / Galerie ──────────────────────────────────────────────────────
   const handleCamera = useCallback(async () => {
     const uri = await takePhoto();
     if (!uri) return;
     setImageUri(uri);
-    await sendImage(uri, 'fr', 8);
+    const userLanguage = getCurrentLanguage();
+    await sendImage(uri, userLanguage as any, 8);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 120);
   }, [sendImage]);
 
@@ -415,17 +407,16 @@ export default function ChatScreen() {
     const uri = await pickFromGallery();
     if (!uri) return;
     setImageUri(uri);
-    await sendImage(uri, 'fr', 8);
+    const userLanguage = getCurrentLanguage();
+    await sendImage(uri, userLanguage as any, 8);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 120);
   }, [sendImage]);
 
-  // ── Effacer l'historique vocal ────────────────────────────────────────────
   const handleClearHistory = useCallback(async () => {
     setMessages([]);
     await AsyncStorage.removeItem(STORAGE_VOICE_HISTORY_KEY);
   }, []);
 
-  // ── Configuration de l'orbe vocal ─────────────────────────────────────────
   const ORB = {
     idle:      { label: t('chat.pressToSpeak'), colors: [Colors.primary, Colors.primaryDark] as const, statusColor: Colors.primary },
     listening: { label: t('chat.listening'), colors: [Colors.danger, '#B91C1C'] as const, statusColor: Colors.danger },
@@ -434,7 +425,6 @@ export default function ChatScreen() {
   };
   const orb = ORB[appState];
 
-  // ── Loading ────────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
       <SafeAreaView style={styles.root} edges={['top']}>
@@ -450,7 +440,6 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      {/* ── Header ── */}
       <Animated.View style={[styles.header, { opacity: fadeIn, transform: [{ translateY: slideUp }] }]}>
         <View style={styles.logoRow}>
           <LinearGradient colors={[Colors.primary, Colors.primaryDark]} style={styles.logoBadge}>
@@ -496,7 +485,6 @@ export default function ChatScreen() {
         </View>
       </Animated.View>
 
-      {/* ── Zone Messages ── */}
       {hasMsgs && (
         <ScrollView
           ref={scrollRef}
@@ -511,7 +499,6 @@ export default function ChatScreen() {
         </ScrollView>
       )}
 
-      {/* ── Mode Voix ── */}
       {mode === 'voice' && (
         <Animated.View style={[
           styles.voiceZone,
@@ -548,7 +535,6 @@ export default function ChatScreen() {
         </Animated.View>
       )}
 
-      {/* ── Mode Texte ── */}
       {mode === 'text' && (
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -590,7 +576,6 @@ export default function ChatScreen() {
         </KeyboardAvoidingView>
       )}
 
-      {/* ── Mode Caméra ── */}
       {mode === 'camera' && (
         <Animated.View style={[
           styles.cameraZone,
@@ -631,13 +616,11 @@ export default function ChatScreen() {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.gray100 },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   loadingText: { color: Colors.gray500, fontSize: Typography.sizes.base, fontWeight: Typography.weights.medium },
 
-  // ── Header ──
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: Spacing.base, paddingTop: Spacing.sm, paddingBottom: Spacing.sm,
@@ -653,7 +636,6 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: Typography.weights.extrabold, color: Colors.black, letterSpacing: 1.2 },
   headerSub: { fontSize: 11, color: Colors.gray500, fontWeight: Typography.weights.medium },
 
-  // ── Switcher ──
   switcher: {
     flexDirection: 'row', backgroundColor: Colors.gray100,
     borderRadius: 20, padding: 3, borderWidth: 1, borderColor: Colors.gray200, gap: 2,
@@ -667,11 +649,9 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.gray200,
   },
 
-  // ── Messages ──
   msgScroll: { flex: 1 },
   msgContent: { paddingHorizontal: Spacing.base, paddingTop: Spacing.md, gap: 10 },
 
-  // ── Bulles ──
   bubble: {
     maxWidth: '82%', alignSelf: 'flex-start',
     backgroundColor: Colors.white, borderRadius: BorderRadius.xl,
@@ -692,7 +672,6 @@ const styles = StyleSheet.create({
   bubbleTextBot: { color: Colors.gray700, fontSize: 15, lineHeight: 22 },
   bubbleImage: { width: '100%', height: 180, borderRadius: BorderRadius.lg, marginBottom: 8 },
 
-  // ── Zone Voix ──
   voiceZone: { alignItems: 'center', justifyContent: 'center', paddingTop: 20, gap: 24 },
   voiceZoneFull: { flex: 1 },
   orbStatus: { fontSize: 15, fontWeight: Typography.weights.semibold, color: Colors.gray600, textAlign: 'center' },
@@ -717,7 +696,6 @@ const styles = StyleSheet.create({
   },
   memoryHint: { fontSize: 12, color: Colors.gray500, fontWeight: Typography.weights.medium },
 
-  // ── Zone Texte ──
   textZone: { flex: 1, justifyContent: 'flex-end' },
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, paddingHorizontal: 40 },
   emptyTitle: { fontSize: 24, fontWeight: Typography.weights.extrabold, color: Colors.black },
@@ -733,7 +711,6 @@ const styles = StyleSheet.create({
   sendWrap: { borderRadius: BorderRadius.xl, ...Shadows.colored(Colors.primary) },
   sendGrad: { width: 48, height: 48, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
 
-  // ── Zone Caméra ──
   cameraZone: { alignItems: 'center', justifyContent: 'center', paddingTop: 16, gap: 28 },
   cameraButtons: { flexDirection: 'row', gap: 24 },
   cameraBtn: {

@@ -19,7 +19,7 @@ from ..core.exceptions import (
 )
 from ..core.security import sanitize_child_text, validate_supported_language, validate_child_age
 from ..core.logging_config import get_logger, log_error
-from ..models.schemas import ChatResponse
+from ..models.schemas import ChatReponse
 from ..utils.prompts import (
     get_chat_prompt,
     get_fallback_chat_response,
@@ -97,7 +97,7 @@ class ChatService:
         child_age: int = 8,
         child_id: Optional[str] = None,
         conversation_history: Optional[List[Dict[str, str]]] = None,
-    ) -> Tuple[ChatResponse, List[Dict[str, str]]]:
+    ) -> Tuple[ChatReponse, List[Dict[str, str]]]:
         """Process a child's message and return the AI tutor's response."""
         self._validate_inputs(message, language, child_age)
 
@@ -124,20 +124,18 @@ class ChatService:
         normalized_history: List[Dict[str, str]] = [
             {
                 "role": m.get("role", "user"),
-                "content": m.get("content") or m.get("content", ""),
+                "content": m.get("content") or m.get("contenu", ""),
             }
             for m in history
         ]
 
-        # USE THE LANGUAGE PARAMETER IN THE PROMPT
+        # Use the language parameter in the prompt
         prompt = get_chat_prompt(
-            language=language,  # ← Pass language to prompt
+            language=language,
             child_age=child_age,
             conversation_history=normalized_history[-self.MAX_HISTORY_MESSAGES:],
             message_type=message_type,
         )
-
-        # Build full prompt in the correct language
         full_prompt = f'{prompt}\n\nThe child says: "{clean_message}"'
 
         try:
@@ -149,7 +147,7 @@ class ChatService:
 
         soma_response = self._build_response(response_data)
         updated_history = self._update_history(
-            normalized_history, clean_message, soma_response.response
+            normalized_history, clean_message, soma_response.reponse
         )
 
         # Fire-and-forget: don't await the DB write — it must not slow the response
@@ -245,15 +243,15 @@ class ChatService:
         except Exception:
             return []
 
-    def _build_response(self, data: Dict[str, Any]) -> ChatResponse:
-        """Build a ChatResponse object from raw response data."""
+    def _build_response(self, data: Dict[str, Any]) -> ChatReponse:
+        """Build a ChatReponse object from raw response data."""
         main_response = data.get("reponse", data.get("response", ""))
         if not main_response:
             main_response = "I'm thinking..."
         follow_up = data.get("question_suivi", data.get("follow_up_question"))
         if follow_up and not follow_up.strip():
             follow_up = None
-        return ChatResponse(
+        return ChatReponse(
             reponse=main_response,
             suggestion_activite=data.get("suggestion_activite"),
             points_gagnes=data.get("points_gagnes", 5),
