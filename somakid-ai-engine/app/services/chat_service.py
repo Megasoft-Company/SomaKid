@@ -1,11 +1,11 @@
 """
 SOMAKID AI Engine - Chat Service
-Orchestre les conversations interactives avec le tuteur IA SOMA.
+Orchestrates interactive conversations with the SOMA AI tutor.
 
-Speed optimisations:
-- MAX_HISTORY_MESSAGES réduit à 6 (prompt plus court → Gemini répond plus vite)
-- Normalisation de l'historique simplifiée (une seule boucle)
-- Session save ne bloque plus la réponse (fire-and-forget via asyncio.create_task)
+Speed optimizations:
+- MAX_HISTORY_MESSAGES reduced to 6 (shorter prompt → faster Gemini response)
+- Simplified history normalization (single loop)
+- Session save no longer blocks the response (fire-and-forget via asyncio.create_task)
 """
 
 from typing import Optional, Dict, Any, List, Tuple
@@ -19,7 +19,7 @@ from ..core.exceptions import (
 )
 from ..core.security import sanitize_child_text, validate_supported_language, validate_child_age
 from ..core.logging_config import get_logger, log_error
-from ..models.schemas import ChatReponse
+from ..models.schemas import ChatResponse
 from ..utils.prompts import (
     get_chat_prompt,
     get_fallback_chat_response,
@@ -56,6 +56,7 @@ LANGUAGE_HINTS = {
 
 
 def detect_language_from_text(text: str, declared_language: str = "fr") -> str:
+    """Detect the language of a given text based on keyword hints."""
     if not text:
         return declared_language
 
@@ -96,12 +97,13 @@ class ChatService:
         child_age: int = 8,
         child_id: Optional[str] = None,
         conversation_history: Optional[List[Dict[str, str]]] = None,
-    ) -> Tuple[ChatReponse, List[Dict[str, str]]]:
+    ) -> Tuple[ChatResponse, List[Dict[str, str]]]:
+        """Process a child's message and return the AI tutor's response."""
         self._validate_inputs(message, language, child_age)
 
         clean_message = sanitize_child_text(message, max_length=500)
         if not clean_message:
-            raise ValidationException("Le message est vide après nettoyage.")
+            raise ValidationException("The message is empty after sanitization.")
 
         detected_language = detect_language_from_text(clean_message, language)
         message_type = detect_message_type(clean_message)
@@ -118,11 +120,11 @@ class ChatService:
         if session_id and not history:
             history = self._load_history(session_id)
 
-        # Normalise in a single pass
+        # Normalize in a single pass
         normalized_history: List[Dict[str, str]] = [
             {
                 "role": m.get("role", "user"),
-                "content": m.get("content") or m.get("contenu", ""),
+                "content": m.get("content") or m.get("content", ""),
             }
             for m in history
         ]
@@ -133,7 +135,7 @@ class ChatService:
             conversation_history=normalized_history[-self.MAX_HISTORY_MESSAGES:],
             message_type=message_type,
         )
-        full_prompt = f"{prompt}\n\nL'enfant dit : \"{clean_message}\""
+        full_prompt = f'{prompt}\n\nThe child says: "{clean_message}"'
 
         try:
             raw_response = await self.gemini.generate_text(prompt=full_prompt)
@@ -144,7 +146,7 @@ class ChatService:
 
         soma_response = self._build_response(response_data)
         updated_history = self._update_history(
-            normalized_history, clean_message, soma_response.reponse
+            normalized_history, clean_message, soma_response.response
         )
 
         # Fire-and-forget: don't await the DB write — it must not slow the response
@@ -165,6 +167,7 @@ class ChatService:
     # ── Session helpers ─────────────────────────────────────────────────────
 
     def create_session(self, child_id: Optional[str] = None) -> str:
+        """Create a new chat session and return the session ID."""
         session_id = f"soma_{generate_short_id('chat')}"
         self.memory.save_progress(session_id, {
             "session_id": session_id,
@@ -181,31 +184,33 @@ class ChatService:
         session_id: str,
         limit: int = 50,
     ) -> List[Dict[str, str]]:
+        """Retrieve conversation history for a given session."""
         session_data = self.memory.load_progress(session_id)
         return session_data.get("messages", [])[-limit:]
 
     def get_quick_questions(self, language: str = "fr") -> List[str]:
+        """Return a list of quick-start questions for the given language."""
         questions = {
             "fr": [
-                "Qu'est-ce que le changement climatique ?",
-                "Comment protéger les animaux ?",
-                "Pourquoi les arbres sont-ils importants ?",
-                "Qu'est-ce qu'un écosystème ?",
-                "Comment économiser l'eau ?",
+                "What is climate change?",
+                "How to protect animals?",
+                "Why are trees important?",
+                "What is an ecosystem?",
+                "How to save water?",
             ],
             "ln": [
-                "Changement climatique ezali nini ?",
-                "Ndenge nini tokoki kobatela banyama ?",
-                "Mpo na nini banzete ezali na ntina ?",
-                "Ekosisteme ezali nini ?",
-                "Ndenge nini tokoki kobatela mai ?",
+                "What is climate change?",
+                "How can we protect animals?",
+                "Why are trees important?",
+                "What is an ecosystem?",
+                "How can we protect water?",
             ],
             "sw": [
-                "Mabadiliko ya hali ya hewa ni nini ?",
-                "Jinsi gani tunaweza kuwalinda wanyama ?",
-                "Kwa nini miti ni muhimu ?",
-                "Mfumo ikolojia ni nini ?",
-                "Jinsi gani tunaweza kuokoa maji ?",
+                "What is climate change?",
+                "How can we protect animals?",
+                "Why are trees important?",
+                "What is an ecosystem?",
+                "How can we save water?",
             ],
         }
         return questions.get(language, questions["fr"])
@@ -213,32 +218,35 @@ class ChatService:
     # ── Private helpers ──────────────────────────────────────────────────────
 
     def _validate_inputs(self, message: str, language: str, child_age: int) -> None:
+        """Validate input parameters before processing."""
         if not message or not message.strip():
-            raise ValidationException("Le message ne peut pas être vide.")
+            raise ValidationException("The message cannot be empty.")
         if len(message) > 1000:
-            raise ValidationException("Message trop long. Maximum 1000 caractères.")
+            raise ValidationException("Message too long. Maximum 1000 characters.")
         if not validate_child_age(child_age):
             raise ValidationException(
-                f"L'âge doit être entre {settings.CHILD_MIN_AGE} et {settings.CHILD_MAX_AGE}."
+                f"Age must be between {settings.CHILD_MIN_AGE} and {settings.CHILD_MAX_AGE}."
             )
 
     def _load_history(self, session_id: str) -> List[Dict[str, str]]:
+        """Load conversation history from memory repository."""
         try:
             return self.memory.load_progress(session_id).get("messages", [])
         except Exception:
             return []
 
-    def _build_response(self, data: Dict[str, Any]) -> ChatReponse:
-        main_response = data.get("reponse", data.get("response", "Je réfléchis..."))
-        follow_up = data.get("question_suivi", data.get("follow_up_question"))
+    def _build_response(self, data: Dict[str, Any]) -> ChatResponse:
+        """Build a ChatResponse object from raw response data."""
+        main_response = data.get("response", data.get("response", "I'm thinking..."))
+        follow_up = data.get("follow_up_question", data.get("follow_up_question"))
         if follow_up and not follow_up.strip():
             follow_up = None
-        return ChatReponse(
-            reponse=main_response,
-            suggestion_activite=None,
-            points_gagnes=data.get("points_gagnes", 5),
-            badge_debloque=None,
-            question_suivi=follow_up,
+        return ChatResponse(
+            response=main_response,
+            activity_suggestion=None,
+            points_earned=data.get("points_earned", 5),
+            badge_unlocked=None,
+            follow_up_question=follow_up,
         )
 
     def _update_history(
@@ -247,6 +255,7 @@ class ChatService:
         user_message: str,
         assistant_response: str,
     ) -> List[Dict[str, str]]:
+        """Append user and assistant messages to the conversation history."""
         updated = history[-48:]  # keep at most 48 before adding 2
         updated = updated + [
             {"role": "user", "content": user_message},
@@ -273,4 +282,4 @@ class ChatService:
                 updated_data["child_id"] = child_id
             self.memory.save_progress(session_id, updated_data)
         except Exception as e:
-            log_error(logger, "Échec de la sauvegarde de la conversation", exception=e)
+            log_error(logger, "Failed to save conversation", exception=e)
