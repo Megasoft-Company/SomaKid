@@ -2,9 +2,6 @@
 SOMAKID AI Engine - Centralized Configuration
 Uses Pydantic Settings for strong typing and validation.
 All environment variables are loaded and validated automatically.
-
-CORRECTIF : env_file utilise maintenant un chemin ABSOLU calculé depuis
-ce fichier, peu importe depuis quel répertoire Uvicorn est lancé.
 """
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
