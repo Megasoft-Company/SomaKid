@@ -2,6 +2,7 @@
 SOMAKID AI Engine - Voice Routes
 HTTP endpoints for text-to-speech and speech-to-text functionality.
 Uses Edge TTS for synthesis and Gemini AI for transcription.
+All comments in English.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -20,9 +21,10 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
-# ─── Edge TTS helper (shared with quiz routes) ────────────────────────────────
+# ─── Edge TTS helper ─────────────────────────────────────────────────────
 
 async def _edge_tts(text: str, langue: str) -> bytes:
+    """Synthesize speech using Microsoft Edge TTS."""
     import edge_tts
     voice_map = {
         "fr": "fr-FR-DeniseNeural",
@@ -39,14 +41,14 @@ async def _edge_tts(text: str, langue: str) -> bytes:
     return audio
 
 
-# ─── Schemas ──────────────────────────────────────────────────────────────────
+# ─── Schemas ──────────────────────────────────────────────────────────────
 
 class DirectSynthesisRequest(BaseModel):
     texte: str = Field(min_length=1, max_length=2000)
     langue: str = Field(default="fr")
 
 
-# ─── Routes ───────────────────────────────────────────────────────────────────
+# ─── Routes ───────────────────────────────────────────────────────────────
 
 @router.post(
     "/synthesize-direct",
@@ -85,6 +87,7 @@ async def synthesize_direct(request: Request, body: DirectSynthesisRequest):
 )
 @limiter.limit("20/minute")
 async def synthesize_speech(request: Request, body: SyntheseVocaleRequete):
+    """Validate a speech synthesis request."""
     if body.langue not in settings.supported_languages_list:
         raise HTTPException(status_code=400, detail=f"Language '{body.langue}' is not supported.")
     if not body.texte or not body.texte.strip():
@@ -110,12 +113,13 @@ async def recognize_speech(
     body: ReconnaissanceVocaleRequete,
     gemini_client: GeminiClient = Depends(get_gemini_client),
 ):
+    """Transcribe speech audio to text."""
     if not body.audio_base64 or len(body.audio_base64) < 100:
         raise HTTPException(status_code=400, detail="Invalid or empty audio data.")
     if body.langue not in settings.supported_languages_list:
         raise HTTPException(status_code=400, detail=f"Language '{body.langue}' is not supported.")
 
-    language_names = {"fr": "French", "ln": "Lingala", "sw": "Swahili"}
+    language_names = {"fr": "French", "ln": "Lingala", "sw": "Swahili", "en": "English"}
 
     try:
         audio_bytes = base64.b64decode(body.audio_base64)
@@ -155,9 +159,11 @@ Just return the exact words spoken, nothing else."""
     description="Get languages supported for voice synthesis and recognition.",
 )
 async def get_voice_languages():
+    """Return supported voice languages."""
     languages = [
         {"code": "fr", "name": "French", "voices": 4},
         {"code": "ln", "name": "Lingala", "voices": 1},
         {"code": "sw", "name": "Swahili", "voices": 2},
+        {"code": "en", "name": "English", "voices": 4},
     ]
     return JSONResponse(content={"success": True, "data": languages})

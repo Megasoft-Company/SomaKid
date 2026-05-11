@@ -1,8 +1,8 @@
 """
-SOMAKID AI Engine - Quiz Routes (CORRIGÉ)
-- Clé Groq depuis variable d'environnement
-- Fallback TTS si Groq indisponible
-- Pipeline voix quiz robuste
+SOMAKID AI Engine - Quiz Routes (Full Multilingual)
+- Groq API key from environment variable
+- Fallback TTS if Groq unavailable
+- Voice quiz pipeline with multilingual support
 """
 
 from typing import Optional, List
@@ -21,21 +21,22 @@ from ...core.exceptions import ValidationException, AIServiceException
 from ...core.logging_config import get_logger
 from ...core.security import limiter
 from ...models.schemas import GenerationQuizRequete, ReponseQuizRequete
+from ...utils.prompts import get_voice_quiz_response
 
 logger = get_logger(__name__)
 router = APIRouter()
 
 
 def _get_groq_client():
-    """Instancie le client Groq avec la clé de l'environnement."""
+    """Instantiate Groq client with key from environment."""
     from groq import Groq
     key = os.environ.get("GROQ_API_KEY", "")
     if not key:
-        raise AIServiceException("GROQ_API_KEY non définie dans l'environnement.")
+        raise AIServiceException("GROQ_API_KEY is not set in the environment.")
     return Groq(api_key=key)
 
 
-# ─── Schemas ──────────────────────────────────────────────────────────────────
+# ─── Schemas ──────────────────────────────────────────────────────────────
 
 class VoiceQuizRequest(BaseModel):
     audio_base64: str = Field(min_length=100)
@@ -45,7 +46,7 @@ class VoiceQuizRequest(BaseModel):
     session_id: Optional[str] = Field(default=None)
 
 
-# ─── TTS helper ───────────────────────────────────────────────────────────────
+# ─── TTS helpers ──────────────────────────────────────────────────────────
 
 async def _edge_tts(text: str, langue: str) -> bytes:
     import edge_tts
@@ -65,7 +66,7 @@ async def _edge_tts(text: str, langue: str) -> bytes:
 
 
 async def _gtts_fallback(text: str, langue: str) -> bytes:
-    """gTTS comme repli si Edge TTS échoue."""
+    """gTTS fallback if Edge TTS fails."""
     from gtts import gTTS
     import io
     lang_map = {"fr": "fr", "ln": "fr", "sw": "sw", "en": "en"}
@@ -83,16 +84,16 @@ async def _tts(text: str, langue: str) -> bytes:
         return await _gtts_fallback(text, langue)
 
 
-# ─── Routes ───────────────────────────────────────────────────────────────────
+# ─── Routes ───────────────────────────────────────────────────────────────
 
 @router.post("/voice-quiz")
 @limiter.limit("20/minute")
 async def voice_quiz(request: Request, body: VoiceQuizRequest):
     """
-    Quiz vocal :
-    1. Transcription Groq Whisper
-    2. Interprétation de la réponse (A/B/C/D)
-    3. Confirmation TTS
+    Voice quiz:
+    1. Groq Whisper transcription
+    2. Answer interpretation (A/B/C/D)
+    3. TTS confirmation in the correct language
     """
     try:
         groq_client = _get_groq_client()
@@ -104,13 +105,13 @@ async def voice_quiz(request: Request, body: VoiceQuizRequest):
         )
 
     try:
-        # ── Décoder l'audio ──────────────────────────────────────────────────
+        # ── Decode audio ──────────────────────────────────────────────────
         audio_data = body.audio_base64
         if "base64," in audio_data:
             audio_data = audio_data.split("base64,")[1]
         audio_bytes = base64.b64decode(audio_data)
 
-        # ── Transcription Whisper ────────────────────────────────────────────
+        # ── Whisper transcription ─────────────────────────────────────────
         tmp = tempfile.NamedTemporaryFile(suffix=".m4a", delete=False)
         tmp.write(audio_bytes)
         tmp.close()
@@ -138,39 +139,24 @@ async def voice_quiz(request: Request, body: VoiceQuizRequest):
                 "data": {"audio_base64": "", "transcription": ""},
             })
 
-        # ── Interpréter la réponse ───────────────────────────────────────────
+        # ── Interpret answer ──────────────────────────────────────────────
         answer_map = {
             "a": 0, "b": 1, "c": 2, "d": 3,
             "1": 0, "2": 1, "3": 2, "4": 3,
         }
 
-        # Chercher A/B/C/D dans les premiers mots
         first_word = child_answer.split()[0] if child_answer.split() else ""
         chosen = answer_map.get(first_word[:1], -1)
 
-        response_texts = {
-            "fr": {
-                "valid": f"Tu as choisi la réponse {first_word[:1].upper()}. Bien joué, continue comme ça !",
-                "invalid": f"Tu as dit : {child_answer}. Essaie de répondre par A, B, C ou D.",
-            },
-            "ln": {
-                "valid": f"Oponi eyano {first_word[:1].upper()}. Malamu, koba bongo !",
-                "invalid": f"Alobi : {child_answer}. Luka ko-eyano na A, B, C to D.",
-            },
-            "sw": {
-                "valid": f"Umechagua jibu {first_word[:1].upper()}. Vizuri sana, endelea !",
-                "invalid": f"Ulisema : {child_answer}. Jaribu kujibu kwa A, B, C au D.",
-            },
-            "en": {
-                "valid": f"You chose answer {first_word[:1].upper()}. Well done, keep it up !",
-                "invalid": f"You said : {child_answer}. Try answering with A, B, C or D.",
-            },
-        }
+        # Use multilingual prompt helper
+        response_text = get_voice_quiz_response(
+            language=body.langue,
+            chosen_letter=first_word[:1].upper() if chosen >= 0 else "",
+            transcription=child_answer,
+            is_valid=(chosen >= 0),
+        )
 
-        lang_texts = response_texts.get(body.langue, response_texts["fr"])
-        response_text = lang_texts["valid"] if chosen >= 0 else lang_texts["invalid"]
-
-        # ── Synthèse vocale ──────────────────────────────────────────────────
+        # ── Voice synthesis ───────────────────────────────────────────────
         try:
             audio_mp3 = await _tts(response_text, body.langue)
             audio_b64 = base64.b64encode(audio_mp3).decode("utf-8")
@@ -204,8 +190,8 @@ async def generate_quiz_question(
     quiz_service: QuizService = Depends(get_quiz_service),
 ):
     """
-    Génère une nouvelle question de quiz.
-    Le session_id assure la déduplication (pas de question répétée).
+    Generate a new quiz question.
+    The question language is determined by body.langue.
     """
     try:
         question = await quiz_service.generate_question(
@@ -216,7 +202,7 @@ async def generate_quiz_question(
         )
         data = question.model_dump()
 
-        # Générer l'audio de la question + options
+        # Generate audio for question + options
         option_texts = " ".join(
             f"Option {label} : {text}"
             for label, text in zip(["A", "B", "C", "D"], question.options)
@@ -243,6 +229,7 @@ async def submit_quiz_answer(
     body: ReponseQuizRequete,
     quiz_service: QuizService = Depends(get_quiz_service),
 ):
+    """Submit a quiz answer for validation."""
     try:
         result = await quiz_service.validate_answer(
             question=None,
@@ -261,15 +248,17 @@ async def get_quiz_subjects(
     language: str = Query(default="fr"),
     quiz_service: QuizService = Depends(get_quiz_service),
 ):
+    """Get available quiz subjects in the requested language."""
     subjects = quiz_service.get_available_subjects(language=language)
     return JSONResponse(content={"success": True, "data": subjects})
 
 
 @router.get("/session/{session_id}")
 async def get_quiz_session_stats(session_id: str, memory_repo=Depends(get_memory_repository)):
+    """Get statistics for a quiz session."""
     progress = memory_repo.load_progress(session_id)
     if not progress or progress.get("quiz_completed", 0) == 0:
-        raise HTTPException(status_code=404, detail=f"Session '{session_id}' introuvable.")
+        raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
     stats = {
         "session_id": session_id,
         "quiz_completed": progress.get("quiz_completed", 0),

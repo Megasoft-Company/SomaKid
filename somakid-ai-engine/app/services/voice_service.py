@@ -16,7 +16,7 @@ from ..core.security import validate_supported_language
 
 logger = get_logger(__name__)
 
-# Clé API chargée depuis les variables d'environnement
+# API key loaded from environment variables
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
 
@@ -28,7 +28,23 @@ class VoiceService:
             logger.warning("GROQ_API_KEY not set - speech recognition will fail")
         logger.info("voice_service_initialized")
 
-    async def synthesize_speech(self, text: str, language: str = "fr", speed: float = 1.0) -> Tuple[bytes, str, float]:
+    async def synthesize_speech(
+        self,
+        text: str,
+        language: str = "fr",
+        speed: float = 1.0,
+    ) -> Tuple[bytes, str, float]:
+        """
+        Synthesize speech from text using Microsoft Edge TTS.
+
+        Args:
+            text: Text to synthesize.
+            language: Language code (fr, ln, sw, en).
+            speed: Speech speed multiplier (0.5 - 2.0).
+
+        Returns:
+            Tuple of (audio_bytes, mime_type, duration_seconds).
+        """
         self._validate_tts_inputs(text, language, speed)
         try:
             import edge_tts
@@ -36,7 +52,7 @@ class VoiceService:
                 "fr": "fr-FR-DeniseNeural",
                 "ln": "fr-FR-DeniseNeural",
                 "sw": "sw-KE-RehemaNeural",
-                "en": "en-US-AriaNeural"
+                "en": "en-US-AriaNeural",
             }
             voice = voice_map.get(language, "fr-FR-DeniseNeural")
             communicate = edge_tts.Communicate(text, voice)
@@ -45,13 +61,33 @@ class VoiceService:
                 if chunk["type"] == "audio":
                     audio_bytes += chunk["data"]
             duration = len(text) * 0.06
-            logger.info("speech_synthesis_complete", language=language, text_length=len(text))
+            logger.info(
+                "speech_synthesis_complete",
+                language=language,
+                text_length=len(text),
+            )
             return audio_bytes, "audio/mp3", duration
         except Exception as e:
             log_error(logger, "Speech synthesis failed", exception=e)
             raise AIServiceException(f"Speech synthesis failed: {str(e)}")
 
-    async def recognize_speech(self, audio_base64: str, language: str = "fr", session_id: str = "") -> Dict[str, Any]:
+    async def recognize_speech(
+        self,
+        audio_base64: str,
+        language: str = "fr",
+        session_id: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Recognize speech from base64-encoded audio using Groq Whisper.
+
+        Args:
+            audio_base64: Base64-encoded audio data.
+            language: Language code (fr, ln, sw, en).
+            session_id: Optional session identifier.
+
+        Returns:
+            Dict with text, confidence, detected_language, processing_time_ms, session_id.
+        """
         if not audio_base64 or len(audio_base64) < 100:
             raise ValidationException("Audio data is too short or empty.")
         if not validate_supported_language(language):
@@ -84,14 +120,18 @@ class VoiceService:
             if not text:
                 text = ""
 
-            logger.info("speech_recognition_complete", language=language, transcribed_length=len(text))
+            logger.info(
+                "speech_recognition_complete",
+                language=language,
+                transcribed_length=len(text),
+            )
 
             return {
                 "text": text,
                 "confidence": 0.95,
                 "detected_language": language,
                 "processing_time_ms": 0,
-                "session_id": session_id
+                "session_id": session_id,
             }
 
         except Exception as e:
@@ -99,24 +139,52 @@ class VoiceService:
             raise AIServiceException(f"Speech recognition failed: {str(e)}")
 
     def get_available_voices(self, language: Optional[str] = None) -> list:
+        """
+        Return available TTS voices, optionally filtered by language.
+
+        Args:
+            language: Optional language code to filter by.
+
+        Returns:
+            List of voice dicts with language, voice_name, gender.
+        """
         voices = {
             "fr": {"language": "fr", "voice_name": "Denise", "gender": "Female"},
             "ln": {"language": "ln", "voice_name": "Denise (French)", "gender": "Female"},
             "sw": {"language": "sw", "voice_name": "Rehema", "gender": "Female"},
-            "en": {"language": "en", "voice_name": "Aria", "gender": "Female"}
+            "en": {"language": "en", "voice_name": "Aria", "gender": "Female"},
         }
         if language:
             return [voices[language]] if language in voices else []
         return list(voices.values())
 
     def get_supported_languages(self) -> list:
+        """
+        Return the list of supported languages for voice synthesis and recognition.
+
+        Returns:
+            List of language dicts with code, name, voice_count.
+        """
         return [
             {"code": "fr", "name": "French", "voice_count": 4},
             {"code": "ln", "name": "Lingala", "voice_count": 1},
-            {"code": "sw", "name": "Swahili", "voice_count": 2}
+            {"code": "sw", "name": "Swahili", "voice_count": 2},
+            {"code": "en", "name": "English", "voice_count": 4},
         ]
 
     def _validate_tts_inputs(self, text: str, language: str, speed: float) -> None:
+        """
+        Validate text-to-speech input parameters.
+
+        Args:
+            text: Text to synthesize.
+            language: Language code.
+            speed: Speech speed multiplier.
+
+        Raises:
+            ValidationException: If any parameter is invalid.
+            UnsupportedLanguageException: If the language is not supported.
+        """
         if not text or not text.strip():
             raise ValidationException("Text cannot be empty.")
         if len(text) > 5000:

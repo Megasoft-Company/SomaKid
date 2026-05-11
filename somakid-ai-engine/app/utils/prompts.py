@@ -262,11 +262,6 @@ def detect_message_type(message: str) -> str:
 
 
 def _build_dedup_block(previous_questions: Optional[List[str]]) -> str:
-    """
-    Build a strong deduplication block for the quiz prompt.
-    Includes both the exact question texts AND semantic fingerprints
-    so the model avoids regenerating questions on the same concept.
-    """
     if not previous_questions:
         return ""
 
@@ -296,7 +291,7 @@ _IMAGE_LANG_INSTRUCTIONS = {
     "fr": "Reponds UNIQUEMENT en francais. Tous les champs texte du JSON doivent etre en francais.",
     "en": "Respond ONLY in English. All text fields in the JSON must be in English.",
     "ln": "Eyano na Lingala KAKA. Maandishi nyonso ya JSON na Lingala.",
-    "sw": "Jibu KWA Kiswahili TU. Maandishi yote ya JSON ywe kwa Kiswahili.",
+    "sw": "Jibu KWA Kiswahili TU. Maandishi yote ya JSON yawe kwa Kiswahili.",
 }
 
 _IMAGE_FIELD_LABELS = {
@@ -562,7 +557,7 @@ _CHAT_LANG_INSTRUCTIONS = {
     "fr": "IMPORTANT: Tous les champs du JSON doivent etre UNIQUEMENT en francais.",
     "en": "IMPORTANT: All JSON fields must be ONLY in English.",
     "ln": "IMPORTANT: Maandishi nyonso ya JSON na Lingala KAKA.",
-    "sw": "MUHIMU: Maandishi yote ya JSON ywe kwa Kiswahili TU.",
+    "sw": "MUHIMU: Maandishi yote ya JSON yawe kwa Kiswahili TU.",
 }
 
 _CHAT_REMINDERS = {

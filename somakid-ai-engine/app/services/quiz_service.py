@@ -23,6 +23,26 @@ _PREV_QUESTIONS_KEY = "quiz_previous_question_texts"
 # Max questions to remember per session (semantic window for dedup)
 _DEDUP_WINDOW = 30
 
+# Multilingual result messages
+_RESULT_MESSAGES = {
+    "fr": {
+        True: "Excellent travail ! Continue comme ca !",
+        False: "Pas de souci ! Apprendre prend du temps. Reessaie !",
+    },
+    "en": {
+        True: "Excellent work! Keep it up!",
+        False: "No worries! Learning takes time. Try again!",
+    },
+    "ln": {
+        True: "Mosala malamu! Koba bongo!",
+        False: "Ezali na probleme te! Koyekola esengaka tango. Meka lisusu!",
+    },
+    "sw": {
+        True: "Kazi nzuri! Endelea hivyo!",
+        False: "Hakuna shida! Kujifunza kunahitaji muda. Jaribu tena!",
+    },
+}
+
 
 class QuizService:
     VALID_SUBJECTS = {
@@ -50,6 +70,7 @@ class QuizService:
         session_id: Optional[str] = None,
         previous_questions: Optional[List[str]] = None,
     ) -> QuestionQuiz:
+        """Generate a new quiz question in the requested language."""
         self._validate_generation_inputs(subject, level, language)
 
         # Load previously asked question TEXTS from session memory
@@ -92,12 +113,14 @@ class QuizService:
         session_id: Optional[str] = None,
         child_id: Optional[str] = None,
         response_time_ms: Optional[int] = None,
+        language: str = "fr",
     ) -> ResultatQuiz:
+        """Validate a quiz answer and return the result with a message in the given language."""
         if question is None:
             return ResultatQuiz(
                 est_correcte=False, reponse_correcte=0,
-                explication="Question non disponible.",
-                points_gagnes=0, message="Reessaie !",
+                explication="Question unavailable.",
+                points_gagnes=0, message="Try again!",
             )
         if not 0 <= chosen_answer < len(question.options):
             raise ValidationException(f"Invalid answer index: {chosen_answer}.")
@@ -110,7 +133,7 @@ class QuizService:
             reponse_correcte=question.reponse_correcte,
             explication=question.explication,
             points_gagnes=points_earned,
-            message=self._get_result_message(is_correct, "fr"),
+            message=self._get_result_message(is_correct, language),
         )
 
         if session_id:
@@ -126,12 +149,19 @@ class QuizService:
         return result
 
     def get_available_subjects(self, language: str = "fr") -> List[Dict[str, Any]]:
+        """Return available quiz subjects in the requested language."""
         subjects = {
             "fr": [
                 {"id": "biodiversity", "name": "Biodiversite",              "emoji": "🌿", "color": "#2D9B6E"},
                 {"id": "climate",      "name": "Climat",                    "emoji": "🌍", "color": "#1B6CA8"},
                 {"id": "disasters",    "name": "Catastrophes Naturelles",   "emoji": "⛈️", "color": "#C0392B"},
                 {"id": "behaviors",    "name": "Comportements Ecologiques", "emoji": "♻️", "color": "#8B5CF6"},
+            ],
+            "en": [
+                {"id": "biodiversity", "name": "Biodiversity",          "emoji": "🌿", "color": "#2D9B6E"},
+                {"id": "climate",      "name": "Climate",               "emoji": "🌍", "color": "#1B6CA8"},
+                {"id": "disasters",    "name": "Natural Disasters",     "emoji": "⛈️", "color": "#C0392B"},
+                {"id": "behaviors",    "name": "Eco-Friendly Behaviors","emoji": "♻️", "color": "#8B5CF6"},
             ],
             "ln": [
                 {"id": "biodiversity", "name": "Biodiversite",        "emoji": "🌿", "color": "#2D9B6E"},
@@ -153,6 +183,7 @@ class QuizService:
     # ─────────────────────────────────────────────────────────────────────────
 
     def _validate_generation_inputs(self, subject: str, level: int, language: str) -> None:
+        """Validate quiz generation input parameters."""
         if subject not in self.VALID_SUBJECTS:
             raise ValidationException(
                 f"Invalid subject: '{subject}'. Valid: {', '.join(self.VALID_SUBJECTS)}"
@@ -163,6 +194,7 @@ class QuizService:
     def _build_question(
         self, data: Dict[str, Any], subject: str, level: int, language: str
     ) -> QuestionQuiz:
+        """Build a QuestionQuiz object from raw AI response data."""
         options = data.get("options", [])
         if len(options) < 2:
             options = ["Option A", "Option B"]
@@ -176,21 +208,21 @@ class QuizService:
             question=data.get("question", "Question"),
             options=options[:4],
             reponse_correcte=correct_index,
-            explication=data.get("explication", data.get("explanation", "Explication")),
+            explication=data.get("explication", data.get("explanation", "Explanation")),
             fait_bonus=data.get("fait_bonus", data.get("bonus_fact")),
             points=points,
             emoji_sujet=data.get("emoji_sujet", data.get("subject_emoji", "🌿")),
             message_felicitations=data.get(
                 "message_felicitations",
-                data.get("congratulations_message", "Bien joue !"),
+                data.get("congratulations_message", "Well done!"),
             ),
             conseil_pratique=data.get("conseil_pratique", data.get("practical_tip")),
         )
 
     def _get_result_message(self, is_correct: bool, language: str) -> str:
-        if is_correct:
-            return "Excellent travail ! Continue comme ca !"
-        return "Pas de souci ! Apprendre prend du temps. Reessaie !"
+        """Return a result message in the given language."""
+        lang_messages = _RESULT_MESSAGES.get(language, _RESULT_MESSAGES["fr"])
+        return lang_messages[is_correct]
 
     # ── Session memory helpers ────────────────────────────────────────────────
 
@@ -236,6 +268,7 @@ class QuizService:
         is_correct: bool,
         points_earned: int,
     ) -> None:
+        """Record a quiz answer in session memory."""
         try:
             progress = self.memory.load_progress(session_id)
             completed = progress.get("quiz_completed", 0) + 1

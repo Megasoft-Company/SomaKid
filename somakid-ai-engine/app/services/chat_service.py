@@ -129,12 +129,15 @@ class ChatService:
             for m in history
         ]
 
+        # USE THE LANGUAGE PARAMETER IN THE PROMPT
         prompt = get_chat_prompt(
-            language=detected_language,
+            language=language,  # ← Pass language to prompt
             child_age=child_age,
             conversation_history=normalized_history[-self.MAX_HISTORY_MESSAGES:],
             message_type=message_type,
         )
+
+        # Build full prompt in the correct language
         full_prompt = f'{prompt}\n\nThe child says: "{clean_message}"'
 
         try:
@@ -142,7 +145,7 @@ class ChatService:
             response_data = self.gemini.extract_json_from_response(raw_response)
         except AIServiceException:
             logger.warning("chat_generation_failed_using_fallback")
-            response_data = get_fallback_chat_response(detected_language, "chat_error")
+            response_data = get_fallback_chat_response(language, "chat_error")
 
         soma_response = self._build_response(response_data)
         updated_history = self._update_history(
@@ -159,7 +162,7 @@ class ChatService:
         logger.info(
             "chat_message_processed",
             session_id=session_id,
-            language=detected_language,
+            language=language,
             message_type=message_type,
         )
         return soma_response, updated_history
@@ -192,6 +195,13 @@ class ChatService:
         """Return a list of quick-start questions for the given language."""
         questions = {
             "fr": [
+                "Qu'est-ce que le changement climatique ?",
+                "Comment protéger les animaux ?",
+                "Pourquoi les arbres sont-ils importants ?",
+                "Qu'est-ce qu'un écosystème ?",
+                "Comment économiser l'eau ?",
+            ],
+            "en": [
                 "What is climate change?",
                 "How to protect animals?",
                 "Why are trees important?",
@@ -199,18 +209,18 @@ class ChatService:
                 "How to save water?",
             ],
             "ln": [
-                "What is climate change?",
-                "How can we protect animals?",
-                "Why are trees important?",
-                "What is an ecosystem?",
-                "How can we protect water?",
+                "Changement climatique ezali nini ?",
+                "Ndenge nini tokoki kobatela banyama ?",
+                "Mpo na nini banzete ezali na ntina ?",
+                "Ekosisteme ezali nini ?",
+                "Ndenge nini tokoki kobatela mai ?",
             ],
             "sw": [
-                "What is climate change?",
-                "How can we protect animals?",
-                "Why are trees important?",
-                "What is an ecosystem?",
-                "How can we save water?",
+                "Mabadiliko ya hali ya hewa ni nini ?",
+                "Jinsi gani tunaweza kuwalinda wanyama ?",
+                "Kwa nini miti ni muhimu ?",
+                "Mfumo ikolojia ni nini ?",
+                "Jinsi gani tunaweza kuokoa maji ?",
             ],
         }
         return questions.get(language, questions["fr"])
@@ -237,16 +247,18 @@ class ChatService:
 
     def _build_response(self, data: Dict[str, Any]) -> ChatResponse:
         """Build a ChatResponse object from raw response data."""
-        main_response = data.get("response", data.get("response", "I'm thinking..."))
-        follow_up = data.get("follow_up_question", data.get("follow_up_question"))
+        main_response = data.get("reponse", data.get("response", ""))
+        if not main_response:
+            main_response = "I'm thinking..."
+        follow_up = data.get("question_suivi", data.get("follow_up_question"))
         if follow_up and not follow_up.strip():
             follow_up = None
         return ChatResponse(
-            response=main_response,
-            activity_suggestion=None,
-            points_earned=data.get("points_earned", 5),
-            badge_unlocked=None,
-            follow_up_question=follow_up,
+            reponse=main_response,
+            suggestion_activite=data.get("suggestion_activite"),
+            points_gagnes=data.get("points_gagnes", 5),
+            badge_debloque=data.get("badge_debloque"),
+            question_suivi=follow_up,
         )
 
     def _update_history(

@@ -1,8 +1,9 @@
 ﻿"""
-SOMAKID AI Engine - Chat Routes (CORRIGÉ v2)
-- Chargement forcé du .env via python-dotenv au démarrage
-- Clé Groq lue depuis variable d'environnement
-- Pipeline voix complet avec mémoire longue durée
+SOMAKID AI Engine - Chat Routes (Full Multilingual)
+- Loads .env via python-dotenv at startup
+- Groq API key read from environment variable
+- Complete voice pipeline with long-term memory
+- ALL prompts now respect the language parameter
 """
 
 from typing import Optional, List
@@ -13,12 +14,9 @@ import tempfile
 import os
 import time
 
-# ── Chargement du .env AVANT tout accès à os.environ ─────────────────────────
-# FastAPI/Uvicorn ne charge pas automatiquement le .env.
-# python-dotenv est déjà une dépendance de pydantic-settings, il est disponible.
+# ── Load .env BEFORE any access to os.environ ─────────────────────────────
 try:
     from dotenv import load_dotenv
-    # Cherche le .env en remontant jusqu'à 5 niveaux depuis ce fichier
     _dir = os.path.dirname(os.path.abspath(__file__))
     for _ in range(5):
         _candidate = os.path.join(_dir, ".env")
@@ -27,7 +25,7 @@ try:
             break
         _dir = os.path.dirname(_dir)
 except ImportError:
-    pass  # python-dotenv absent : les vars doivent être définies dans l'OS
+    pass
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -39,23 +37,24 @@ from ...repositories.memory_repository import MemoryRepository
 from ...core.exceptions import ValidationException, AIServiceException
 from ...core.logging_config import get_logger
 from ...core.security import limiter
+from ...utils.prompts import get_voice_system_prompt, get_voice_fallback
 
 logger = get_logger(__name__)
 router = APIRouter()
 
-# ─── Client Groq (instancié à la demande, clé depuis env) ─────────────────────
+# ─── Groq client (instantiated on demand, key from env) ────────────────────
 def _get_groq_client():
     from groq import Groq
     key = os.environ.get("GROQ_API_KEY", "").strip()
     if not key:
         raise AIServiceException(
-            "GROQ_API_KEY non définie. Vérifiez votre fichier .env "
-            "et que python-dotenv est installé (pip install python-dotenv)."
+            "GROQ_API_KEY is not set. Check your .env file "
+            "and ensure python-dotenv is installed (pip install python-dotenv)."
         )
     return Groq(api_key=key)
 
 
-# ─── Schemas ──────────────────────────────────────────────────────────────────
+# ─── Schemas ──────────────────────────────────────────────────────────────
 
 class ChatMessageRequest(BaseModel):
     message: str = Field(min_length=1, max_length=1000)
@@ -77,7 +76,7 @@ class TTSRequest(BaseModel):
     langue: str = Field(default="fr")
 
 
-# ─── TTS helpers ──────────────────────────────────────────────────────────────
+# ─── TTS helpers ──────────────────────────────────────────────────────────
 
 async def _edge_tts(text: str, langue: str) -> bytes:
     import edge_tts
@@ -114,7 +113,7 @@ async def _text_to_speech(text: str, langue: str) -> bytes:
         return await _gtts(text, langue)
 
 
-# ─── Helpers mémoire longue durée ─────────────────────────────────────────────
+# ─── Long-term memory helpers ─────────────────────────────────────────────
 
 HISTORY_KEY_PREFIX  = "voice_history:"
 MAX_STORED_MESSAGES = 100
@@ -142,7 +141,7 @@ def _save_voice_history(
         logger.error("save_voice_history_error", error=str(e))
 
 
-# ─── Routes ───────────────────────────────────────────────────────────────────
+# ─── Routes ───────────────────────────────────────────────────────────────
 
 @router.post("/voice-chat")
 @limiter.limit("20/minute")
@@ -151,6 +150,13 @@ async def voice_chat(
     body: VoiceChatRequest,
     memory_repo: MemoryRepository = Depends(get_memory_repository),
 ):
+    """
+    Voice chat pipeline:
+    1. Whisper transcription
+    2. Llama response with full conversation history
+    3. TTS audio synthesis
+    The response language is determined by body.langue.
+    """
     session_id = body.identifiant_session or "voice_default"
 
     try:
@@ -163,7 +169,7 @@ async def voice_chat(
         )
 
     try:
-        # ── Décoder l'audio ──────────────────────────────────────────────────
+        # ── Decode audio ──────────────────────────────────────────────────
         audio_data = body.audio_base64
         if "base64," in audio_data:
             audio_data = audio_data.split("base64,")[1]
@@ -171,11 +177,11 @@ async def voice_chat(
             audio_bytes = base64.b64decode(audio_data)
         except Exception:
             return JSONResponse(
-                content={"success": False, "error": "Audio base64 invalide.", "data": {"audio_base64": ""}},
+                content={"success": False, "error": "Invalid base64 audio.", "data": {"audio_base64": ""}},
                 status_code=400,
             )
 
-        # ── Étape 1 : Transcription Whisper ───────────────────────────────────
+        # ── Step 1: Whisper Transcription ─────────────────────────────────
         tmp = tempfile.NamedTemporaryFile(suffix=".m4a", delete=False)
         tmp.write(audio_bytes)
         tmp.close()
@@ -199,27 +205,18 @@ async def voice_chat(
         if not child_text or len(child_text) < 2:
             return JSONResponse(content={
                 "success": True,
-                "data": {"audio_base64": "", "transcription": "", "message": "Audio trop court."},
+                "data": {"audio_base64": "", "transcription": "", "message": "Audio too short."},
             })
 
         logger.info("whisper_ok", text=child_text[:80], session=session_id)
 
-        # ── Charger historique persistant ─────────────────────────────────────
+        # ── Load persistent history ───────────────────────────────────────
         history = _load_voice_history(memory_repo, session_id)
 
-        # ── Étape 2 : Réponse Llama avec historique ───────────────────────────
-        lang_names = {"fr": "francais", "ln": "lingala", "sw": "swahili", "en": "anglais"}
-        lang = lang_names.get(body.langue, "francais")
+        # ── Step 2: Llama response with MULTILINGUAL system prompt ────────
+        system_prompt = get_voice_system_prompt(body.langue)
 
-        api_messages = [{
-            "role": "system",
-            "content": (
-                f"Tu es SOMAKID, un enseignant africain bienveillant. "
-                f"Tu parles en {lang}. Tu te souviens de toute la conversation. "
-                f"Réponds en 2-3 phrases max avec des mots simples pour enfants. "
-                f"Si l'enfant mentionne quelque chose dit précédemment, utilise l'historique."
-            ),
-        }]
+        api_messages = [{"role": "system", "content": system_prompt}]
         for msg in history[-12:]:
             role = msg.get("role", "user")
             content = msg.get("content", "")
@@ -240,15 +237,14 @@ async def voice_chat(
             soma_text = ""
 
         if not soma_text:
-            fallback = {"fr": "Désolé, peux-tu répéter ?", "ln": "Lobela lisusu ?", "sw": "Unaweza kurudia ?", "en": "Can you repeat ?"}
-            soma_text = fallback.get(body.langue, fallback["fr"])
+            soma_text = get_voice_fallback(body.langue)
 
-        # ── Mettre à jour et sauvegarder l'historique ─────────────────────────
+        # ── Update and save history ───────────────────────────────────────
         history.append({"role": "user", "content": child_text})
         history.append({"role": "assistant", "content": soma_text})
         asyncio.create_task(asyncio.to_thread(_save_voice_history, memory_repo, session_id, history))
 
-        # ── Étape 3 : Synthèse vocale ─────────────────────────────────────────
+        # ── Step 3: Voice synthesis ───────────────────────────────────────
         try:
             audio_mp3 = await _text_to_speech(soma_text, body.langue)
         except Exception as e:
@@ -278,6 +274,10 @@ async def send_message(
     chat_service: ChatService = Depends(get_chat_service),
     memory_repo: MemoryRepository = Depends(get_memory_repository),
 ):
+    """
+    Send a text message to the AI tutor.
+    The response language is determined by body.langue.
+    """
     try:
         session_id = body.identifiant_session or body.session_id or f"session_{int(time.time())}"
         if not body.message or not body.message.strip():
@@ -291,6 +291,7 @@ async def send_message(
             except Exception:
                 history = []
 
+        # Pass language to chat service
         response, updated_history = await chat_service.send_message(
             message=body.message.strip(),
             language=body.langue,
@@ -320,6 +321,7 @@ async def send_message(
 @router.post("/tts")
 @limiter.limit("30/minute")
 async def text_to_speech(request: Request, body: TTSRequest):
+    """Convert text to speech in the requested language."""
     try:
         audio_mp3 = await _text_to_speech(body.text, body.langue)
         return JSONResponse(content={
@@ -336,6 +338,7 @@ async def create_chat_session(
     child_id: Optional[str] = None,
     chat_service: ChatService = Depends(get_chat_service),
 ):
+    """Create a new chat session."""
     session_id = chat_service.create_session(child_id=child_id)
     return JSONResponse(
         content={"success": True, "data": {"session_id": session_id, "child_id": child_id}},
@@ -349,10 +352,11 @@ async def get_chat_history(
     limit: int = 50,
     chat_service: ChatService = Depends(get_chat_service),
 ):
+    """Get conversation history for a session."""
     try:
         history = chat_service.get_conversation_history(session_id=session_id, limit=limit)
         if not history:
-            raise HTTPException(status_code=404, detail=f"Session '{session_id}' introuvable.")
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
         return JSONResponse(content={
             "success": True,
             "data": {"session_id": session_id, "messages": history, "total_messages": len(history)},
@@ -361,7 +365,7 @@ async def get_chat_history(
         raise
     except Exception as e:
         logger.error("get_history_error", error=str(e))
-        raise HTTPException(status_code=404, detail=f"Session '{session_id}' introuvable.")
+        raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
 
 
 @router.get("/session/{session_id}/voice-history")
@@ -370,10 +374,11 @@ async def get_voice_history(
     limit: int = 50,
     memory_repo: MemoryRepository = Depends(get_memory_repository),
 ):
+    """Get voice conversation history for a session."""
     try:
         messages = _load_voice_history(memory_repo, session_id)
         if not messages:
-            raise HTTPException(status_code=404, detail=f"Historique voix '{session_id}' introuvable.")
+            raise HTTPException(status_code=404, detail=f"Voice history '{session_id}' not found.")
         return JSONResponse(content={
             "success": True,
             "data": {"session_id": session_id, "messages": messages[-limit:], "total_messages": len(messages) // 2},
@@ -382,4 +387,4 @@ async def get_voice_history(
         raise
     except Exception as e:
         logger.error("get_voice_history_error", error=str(e))
-        raise HTTPException(status_code=404, detail="Historique voix introuvable.")
+        raise HTTPException(status_code=404, detail="Voice history not found.")
