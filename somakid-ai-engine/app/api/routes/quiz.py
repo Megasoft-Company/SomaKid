@@ -1,13 +1,10 @@
 """
-SOMAKID AI Engine - Quiz Routes (Full Multilingual)
-- Groq API key from environment variable
-- Fallback TTS if Groq unavailable
-- Voice quiz pipeline with multilingual support
-- Question/Option labels translated per language
+SOMAKID AI Engine - Quiz Routes
 """
 
 from typing import Optional, List
 import base64
+import io
 import tempfile
 import os
 
@@ -27,7 +24,15 @@ from ...utils.prompts import get_voice_quiz_response
 logger = get_logger(__name__)
 router = APIRouter()
 
-# Multilingual labels for audio generation
+ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "").strip()
+
+ELEVENLABS_VOICE_MAP = {
+    "fr": "pNInz6obpgDQGcFmaJgB",
+    "ln": "pNInz6obpgDQGcFmaJgB",
+    "sw": "TxGEqnHWrfWFTfGW9XjX",
+    "en": "21m00Tcm4TlvDq8ikWAM",
+}
+
 _AUDIO_LABELS = {
     "fr": {"question": "Question", "option": "Option"},
     "en": {"question": "Question", "option": "Option"},
@@ -53,6 +58,76 @@ class VoiceQuizRequest(BaseModel):
     session_id: Optional[str] = Field(default=None)
 
 
+def _build_question_audio_text(question_text: str, options: List[str], langue: str) -> str:
+    """
+    Build a natural-sounding audio text with pauses between options.
+    Uses SSML-like breaks and phonetic normalization for African languages.
+    """
+    labels = _AUDIO_LABELS.get(langue, _AUDIO_LABELS["fr"])
+    question_label = labels["question"]
+    option_label = labels["option"]
+
+    letters = ["A", "B", "C", "D"]
+
+    parts = [f"{question_label}."]
+    parts.append(question_text)
+    parts.append("")
+
+    for i, (letter, option_text) in enumerate(zip(letters, options)):
+        if option_text:
+            normalized_option = _normalize_phonetic(option_text, langue)
+            parts.append(f"{option_label} {letter}.")
+            parts.append(normalized_option)
+            parts.append("")
+
+    return ". ".join(part for part in parts if part)
+
+
+def _normalize_phonetic(text: str, langue: str) -> str:
+    """
+    Normalize text for better pronunciation in African languages.
+    Replaces special characters with phonetic equivalents that TTS engines pronounce correctly.
+    """
+    if langue == "ln":
+        phonetic_map = {
+            "ɛ": "e", "ɔ": "o", "á": "a", "é": "e", "í": "i",
+            "ó": "o", "ú": "ou", "â": "a", "ê": "e", "î": "i",
+            "ô": "o", "û": "ou", "ǎ": "a", "ě": "e", "ǐ": "i",
+            "ǒ": "o", "ǔ": "ou",
+        }
+    elif langue == "sw":
+        phonetic_map = {
+            "á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u",
+            "â": "a", "ê": "e", "î": "i", "ô": "o", "û": "u",
+            "ng'": "ng", "ng’": "ng",
+        }
+    else:
+        return text
+
+    result = text
+    for accented, replacement in phonetic_map.items():
+        result = result.replace(accented, replacement)
+    return result
+
+
+async def _elevenlabs_tts(text: str, langue: str) -> bytes:
+    """Text-to-speech with ElevenLabs for perfect African language pronunciation."""
+    if not ELEVENLABS_API_KEY:
+        raise Exception("ELEVENLABS_API_KEY not configured")
+    from elevenlabs import ElevenLabs
+    client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+    voice_id = ELEVENLABS_VOICE_MAP.get(langue, ELEVENLABS_VOICE_MAP["fr"])
+    audio_generator = client.generate(
+        text=text,
+        voice=voice_id,
+        model="eleven_multilingual_v2",
+    )
+    audio_bytes = b""
+    for chunk in audio_generator:
+        audio_bytes += chunk
+    return audio_bytes
+
+
 async def _edge_tts(text: str, langue: str) -> bytes:
     import edge_tts
     voice_map = {
@@ -62,7 +137,16 @@ async def _edge_tts(text: str, langue: str) -> bytes:
         "en": "en-US-AriaNeural",
     }
     voice = voice_map.get(langue, "fr-FR-DeniseNeural")
-    communicate = edge_tts.Communicate(text, voice)
+
+    ssml = f"""<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="{langue}">
+        <voice name="{voice}">
+            <prosody rate="0.85" pitch="+0Hz">
+                {text.replace('.', '.<break time="400ms"/>').replace('?', '?<break time="500ms"/>').replace('!', '!<break time="500ms"/>').replace(',', ',<break time="200ms"/>')}
+            </prosody>
+        </voice>
+    </speak>"""
+
+    communicate = edge_tts.Communicate(ssml, voice)
     audio = b""
     async for chunk in communicate.stream():
         if chunk["type"] == "audio":
@@ -71,22 +155,31 @@ async def _edge_tts(text: str, langue: str) -> bytes:
 
 
 async def _gtts_fallback(text: str, langue: str) -> bytes:
-    """gTTS fallback if Edge TTS fails."""
+    """gTTS fallback if both ElevenLabs and Edge TTS fail."""
     from gtts import gTTS
-    import io
     lang_map = {"fr": "fr", "ln": "fr", "sw": "sw", "en": "en"}
+    clean_text = text.replace(". ", ".   ").replace("? ", "?   ").replace(", ", ",  ")
     buf = io.BytesIO()
-    gTTS(text=text, lang=lang_map.get(langue, "fr"), slow=False).write_to_fp(buf)
+    gTTS(text=clean_text, lang=lang_map.get(langue, "fr"), slow=True)
+    gTTS(text=clean_text, lang=lang_map.get(langue, "fr"), slow=True).write_to_fp(buf)
     buf.seek(0)
     return buf.read()
 
 
-async def _tts(text: str, langue: str) -> bytes:
+async def _text_to_speech(text: str, langue: str) -> bytes:
+    """TTS with ElevenLabs primary, Edge TTS secondary, gTTS fallback."""
+    normalized_text = _normalize_phonetic(text, langue)
+
+    if ELEVENLABS_API_KEY:
+        try:
+            return await _elevenlabs_tts(normalized_text, langue)
+        except Exception as e:
+            logger.warning("elevenlabs_tts_failed_falling_back_to_edge", error=str(e))
     try:
-        return await _edge_tts(text, langue)
+        return await _edge_tts(normalized_text, langue)
     except Exception as e:
-        logger.warning("edge_tts_fallback_quiz", error=str(e))
-        return await _gtts_fallback(text, langue)
+        logger.warning("edge_tts_failed_falling_back_to_gtts", error=str(e))
+        return await _gtts_fallback(normalized_text, langue)
 
 
 @router.post("/voice-quiz")
@@ -150,7 +243,7 @@ async def voice_quiz(request: Request, body: VoiceQuizRequest):
         )
 
         try:
-            audio_mp3 = await _tts(response_text, body.langue)
+            audio_mp3 = await _text_to_speech(response_text, body.langue)
             audio_b64 = base64.b64encode(audio_mp3).decode("utf-8")
         except Exception as e:
             logger.error("tts_quiz_error", error=str(e))
@@ -190,20 +283,14 @@ async def generate_quiz_question(
         )
         data = question.model_dump()
 
-        # Get translated labels
-        labels = _AUDIO_LABELS.get(body.langue, _AUDIO_LABELS["fr"])
-        question_label = labels["question"]
-        option_label = labels["option"]
-
-        # Build audio text with translated labels
-        option_texts = " ".join(
-            f"{option_label} {letter} : {text}"
-            for letter, text in zip(["A", "B", "C", "D"], question.options)
-            if text
+        question_audio_text = _build_question_audio_text(
+            question_text=question.question,
+            options=question.options,
+            langue=body.langue,
         )
-        question_audio_text = f"{question_label}. {question.question}. {option_texts}."
+
         try:
-            audio_mp3 = await _tts(question_audio_text, body.langue)
+            audio_mp3 = await _text_to_speech(question_audio_text, body.langue)
             data["audio_base64"] = base64.b64encode(audio_mp3).decode("utf-8")
         except Exception as e:
             logger.error("quiz_tts_error", error=str(e))
