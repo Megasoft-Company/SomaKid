@@ -1,53 +1,67 @@
-# SOMAKID AI - Mobile Application
+# SOMAKID AI — Mobile Application
 
-Intelligent AI Tutor for Climate Education, Biodiversity Awareness, and Children's Resilience.
+> Intelligent AI Tutor for Climate Education, Biodiversity Awareness, and Children's Resilience.
+
+---
 
 ## Overview
 
 SOMAKID AI is a mobile application that transforms nature into an interactive classroom. Using artificial intelligence, children can identify plants and animals, learn about climate change, and become environmental guardians.
 
+Open-source solution dedicated to bridging the educational gap in vulnerable regions of the Democratic Republic of the Congo and beyond.
+
+---
+
 ## Features
 
-### Biodiversity Explorer
+### 🌿 Biodiversity Explorer
 - AI-powered species identification from camera photos
 - Child-friendly descriptions and ecological information
 - Fun facts and conservation tips
 - Points and badges for discoveries
 
-### Climate Resilience Academy
+### 🌍 Climate Resilience Academy
 - Gamified educational quizzes
 - Multiple subjects: Biodiversity, Climate, Natural Disasters, Eco-Behaviors
-- 5 difficulty levels adapting to child's knowledge
+- 5 difficulty levels adapting to the child's knowledge
 - Progress tracking and achievements
 
-### SOMA AI Tutor
-- Interactive chat with friendly AI tutor
+### 🤖 SOMA AI Tutor
+- Interactive chat with a friendly AI tutor
 - Educational conversations about nature and climate
-- Voice support for non-reading children
-- Multilingual: French, Lingala, Swahili
+- Voice support for pre-reading children
+- Multilingual support: French, Lingala, Swahili
 
-### Child Progress Tracking
-- Level progression system (Junior Explorer to Climate Guardian)
+### 📈 Child Progress Tracking
+- Level progression system (Junior Explorer → Climate Guardian)
 - Achievement badges
 - Species discovery collection
 - Learning statistics
 
+---
+
 ## Tech Stack
 
-- **Framework**: React Native / Expo SDK 53
-- **Language**: TypeScript
-- **Navigation**: Expo Router
-- **State Management**: Zustand
-- **HTTP Client**: Axios
-- **Animation**: React Native Reanimated
-- **Backend**: SOMAKID AI Engine (FastAPI + Gemini AI)
+| Layer | Technology |
+|---|---|
+| Framework | React Native / Expo SDK 53 |
+| Language | TypeScript |
+| Navigation | Expo Router |
+| State Management | Zustand |
+| HTTP Client | Axios |
+| Animation | React Native Reanimated |
+| Backend | SOMAKID AI Engine (FastAPI + Gemini AI) |
+
+---
 
 ## Prerequisites
 
 - Node.js 18+
 - npm or yarn
-- Expo CLI (`npm install -g expo-cli`)
-- Expo Go app on your mobile device
+- Expo CLI: `npm install -g expo-cli`
+- Expo Go app installed on your mobile device
+
+---
 
 ## Installation
 
@@ -63,8 +77,13 @@ npm install
 cp .env.example .env
 
 # Edit .env with your API endpoints
-Running the App
-bash
+```
+
+---
+
+## Running the App
+
+```bash
 # Start the development server
 npm start
 
@@ -76,10 +95,15 @@ npm run ios
 
 # Run on web
 npm run web
-Scan the QR code with Expo Go (Android) or the Camera app (iOS).
+```
 
-Project Structure
-text
+Scan the QR code with **Expo Go** (Android) or the **Camera app** (iOS).
+
+---
+
+## Project Structure
+
+```
 somakid-frontend/
 ├── app/
 │   ├── _layout.tsx              # Root layout
@@ -113,14 +137,24 @@ somakid-frontend/
 │   └── domain.types.ts
 └── constants/
     └── theme.ts
-Environment Variables
-Variable	Description	Default
-EXPO_PUBLIC_AI_ENGINE_URL	AI Engine API URL	http://localhost:8000
-EXPO_PUBLIC_BACKEND_URL	Backend API URL	http://localhost:8080
-EXPO_PUBLIC_APP_NAME	Application name	SOMAKID AI
-EXPO_PUBLIC_DEFAULT_LANGUAGE	Default language	fr
-Building for Production
-bash
+```
+
+---
+
+## Environment Variables
+
+| Variable | Description | Default |
+|---|---|---|
+| `EXPO_PUBLIC_AI_ENGINE_URL` | AI Engine API URL | `http://localhost:8000` |
+| `EXPO_PUBLIC_BACKEND_URL` | Backend API URL | `http://localhost:8080` |
+| `EXPO_PUBLIC_APP_NAME` | Application name | `SOMAKID AI` |
+| `EXPO_PUBLIC_DEFAULT_LANGUAGE` | Default language | `fr` |
+
+---
+
+## Building for Production
+
+```bash
 # Install EAS CLI
 npm install -g eas-cli
 
@@ -139,8 +173,13 @@ eas build --platform ios --profile production
 # Submit to stores
 eas submit --platform android
 eas submit --platform ios
-Testing
-bash
+```
+
+---
+
+## Testing
+
+```bash
 # Type checking
 npm run type-check
 
@@ -155,28 +194,41 @@ npm test
 
 # Run tests with coverage
 npm run test:coverage
-Supported Languages
-Code	Language	Status
-fr	French	Complete
-ln	Lingala	Complete
-sw	Swahili	Complete
-License
-MIT License - See LICENSE file for details.
-
-Contact
-SOMAKID AI Team - contact@somakid.ai
-
-Built with ❤️ for the children of Africa and the planet.
-
-text
+```
 
 ---
 
-## FILE 39 : `assets/images/.gitkeep`
+## Supported Languages
 
-```gitkeep
-This directory contains image assets for the SOMAKID AI application:
-- icon.png (1024x1024 app icon)
-- adaptive-icon.png (Android adaptive icon)
-- splash-icon.png (Splash screen image)
-- favicon.png (Web favicon)
+| Code | Language | Status |
+|---|---|---|
+| `fr` | French | ✅ Complete |
+| `ln` | Lingala | ✅ Complete |
+| `sw` | Swahili | ✅ Complete |
+
+---
+
+## Assets
+
+The `assets/images/` directory should contain the following image files:
+
+- `icon.png` — App icon (1024×1024)
+- `adaptive-icon.png` — Android adaptive icon
+- `splash-icon.png` — Splash screen image
+- `favicon.png` — Web favicon
+
+---
+
+## License
+
+MIT License — See [LICENSE](LICENSE) file for details.
+
+---
+
+## Contact
+
+**SOMAKID AI Team** — contact@somakid.ai
+
+---
+
+*Built with ❤️ for the children of Africa and the planet.*
