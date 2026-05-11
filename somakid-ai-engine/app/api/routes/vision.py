@@ -1,15 +1,15 @@
 """
 SOMAKID AI Engine - Vision Analysis Routes
-HTTP endpoints for biodiversity image analysis.
-All comments in English.
 """
 
 from typing import Optional
 import base64
 import io
+import os
 
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
+from datetime import datetime, timezone
 
 from ..deps import get_vision_service
 from ...services.vision_service import VisionService
@@ -21,31 +21,74 @@ from ...core.security import limiter
 logger = get_logger(__name__)
 router = APIRouter()
 
+ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "").strip()
 
-async def _tts(text: str, langue: str) -> bytes:
-    """Convert text to speech in the given language."""
+ELEVENLABS_VOICE_MAP = {
+    "fr": "pNInz6obpgDQGcFmaJgB",
+    "ln": "pNInz6obpgDQGcFmaJgB",
+    "sw": "TxGEqnHWrfWFTfGW9XjX",
+    "en": "21m00Tcm4TlvDq8ikWAM",
+}
+
+
+async def _elevenlabs_tts(text: str, langue: str) -> bytes:
+    """Text-to-speech with ElevenLabs for perfect African language pronunciation."""
+    if not ELEVENLABS_API_KEY:
+        raise Exception("ELEVENLABS_API_KEY not configured")
+    from elevenlabs import ElevenLabs
+    client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+    voice_id = ELEVENLABS_VOICE_MAP.get(langue, ELEVENLABS_VOICE_MAP["fr"])
+    audio_generator = client.generate(
+        text=text,
+        voice=voice_id,
+        model="eleven_multilingual_v2",
+    )
+    audio_bytes = b""
+    for chunk in audio_generator:
+        audio_bytes += chunk
+    return audio_bytes
+
+
+async def _edge_tts(text: str, langue: str) -> bytes:
+    """Synthesize speech using Microsoft Edge TTS."""
+    import edge_tts
+    voice_map = {
+        "fr": "fr-FR-DeniseNeural",
+        "ln": "fr-FR-DeniseNeural",
+        "sw": "sw-KE-RehemaNeural",
+        "en": "en-US-AriaNeural",
+    }
+    voice = voice_map.get(langue, "fr-FR-DeniseNeural")
+    communicate = edge_tts.Communicate(text, voice)
+    audio = b""
+    async for chunk in communicate.stream():
+        if chunk["type"] == "audio":
+            audio += chunk["data"]
+    return audio
+
+
+async def _gtts_fallback(text: str, langue: str) -> bytes:
+    """gTTS fallback if both ElevenLabs and Edge TTS fail."""
+    from gtts import gTTS
+    lang_map = {"fr": "fr", "ln": "fr", "sw": "sw", "en": "en"}
+    mp3 = io.BytesIO()
+    gTTS(text=text, lang=lang_map.get(langue, "fr"), slow=False).write_to_fp(mp3)
+    mp3.seek(0)
+    return mp3.read()
+
+
+async def _text_to_speech(text: str, langue: str) -> bytes:
+    """TTS with ElevenLabs primary, Edge TTS secondary, gTTS fallback."""
+    if ELEVENLABS_API_KEY:
+        try:
+            return await _elevenlabs_tts(text, langue)
+        except Exception as e:
+            logger.warning("elevenlabs_tts_failed_falling_back_to_edge", error=str(e))
     try:
-        import edge_tts
-        voice_map = {
-            "fr": "fr-FR-DeniseNeural",
-            "ln": "fr-FR-DeniseNeural",
-            "sw": "sw-KE-RehemaNeural",
-            "en": "en-US-AriaNeural",
-        }
-        voice = voice_map.get(langue, "fr-FR-DeniseNeural")
-        communicate = edge_tts.Communicate(text, voice)
-        audio = b""
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                audio += chunk["data"]
-        return audio
-    except Exception:
-        from gtts import gTTS
-        lang_map = {"fr": "fr", "ln": "fr", "sw": "sw", "en": "en"}
-        mp3 = io.BytesIO()
-        gTTS(text=text, lang=lang_map.get(langue, "fr"), slow=False).write_to_fp(mp3)
-        mp3.seek(0)
-        return mp3.read()
+        return await _edge_tts(text, langue)
+    except Exception as e:
+        logger.warning("edge_tts_failed_falling_back_to_gtts", error=str(e))
+        return await _gtts_fallback(text, langue)
 
 
 @router.post("/analyze")
@@ -76,16 +119,14 @@ async def analyze_image(
             language=language,
             child_age=child_age,
         )
-        # Build description text in the correct language
         soma_text = (
             f"{result.espece}. {result.description_enfant} "
             f"Son role: {result.role_ecologique}. "
             f"Le savais-tu? {result.fait_amusant}. {result.action_enfant}"
         )
-        audio_mp3 = await _tts(soma_text, language)
+        audio_mp3 = await _text_to_speech(soma_text, language)
         data = result.model_dump()
         data["audio_base64"] = base64.b64encode(audio_mp3).decode("utf-8")
-        from datetime import datetime, timezone
         return JSONResponse(content={
             "success": True,
             "data": data,

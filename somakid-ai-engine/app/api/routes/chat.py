@@ -1,9 +1,5 @@
 ﻿"""
-SOMAKID AI Engine - Chat Routes (Full Multilingual)
-- Loads .env via python-dotenv at startup
-- Groq API key read from environment variable
-- Complete voice pipeline with long-term memory
-- ALL prompts now respect the language parameter
+SOMAKID AI Engine - Chat Routes 
 """
 
 from typing import Optional, List
@@ -14,7 +10,6 @@ import tempfile
 import os
 import time
 
-# ── Load .env BEFORE any access to os.environ ─────────────────────────────
 try:
     from dotenv import load_dotenv
     _dir = os.path.dirname(os.path.abspath(__file__))
@@ -42,7 +37,43 @@ from ...utils.prompts import get_voice_system_prompt, get_voice_fallback
 logger = get_logger(__name__)
 router = APIRouter()
 
-# ─── Groq client (instantiated on demand, key from env) ────────────────────
+ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "").strip()
+
+ELEVENLABS_VOICE_MAP = {
+    "fr": "pNInz6obpgDQGcFmaJgB",
+    "ln": "pNInz6obpgDQGcFmaJgB",
+    "sw": "TxGEqnHWrfWFTfGW9XjX",
+    "en": "21m00Tcm4TlvDq8ikWAM",
+}
+
+
+def _normalize_phonetic(text: str, langue: str) -> str:
+    """
+    Normalize text for better pronunciation in African languages.
+    Replaces special characters with phonetic equivalents that TTS engines pronounce correctly.
+    """
+    if langue == "ln":
+        phonetic_map = {
+            "ɛ": "e", "ɔ": "o", "á": "a", "é": "e", "í": "i",
+            "ó": "o", "ú": "ou", "â": "a", "ê": "e", "î": "i",
+            "ô": "o", "û": "ou", "ǎ": "a", "ě": "e", "ǐ": "i",
+            "ǒ": "o", "ǔ": "ou",
+        }
+    elif langue == "sw":
+        phonetic_map = {
+            "á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u",
+            "â": "a", "ê": "e", "î": "i", "ô": "o", "û": "u",
+            "ng'": "ng", "ng’": "ng",
+        }
+    else:
+        return text
+
+    result = text
+    for accented, replacement in phonetic_map.items():
+        result = result.replace(accented, replacement)
+    return result
+
+
 def _get_groq_client():
     from groq import Groq
     key = os.environ.get("GROQ_API_KEY", "").strip()
@@ -53,8 +84,6 @@ def _get_groq_client():
         )
     return Groq(api_key=key)
 
-
-# ─── Schemas ──────────────────────────────────────────────────────────────
 
 class ChatMessageRequest(BaseModel):
     message: str = Field(min_length=1, max_length=1000)
@@ -76,9 +105,26 @@ class TTSRequest(BaseModel):
     langue: str = Field(default="fr")
 
 
-# ─── TTS helpers ──────────────────────────────────────────────────────────
+async def _elevenlabs_tts(text: str, langue: str) -> bytes:
+    """Text-to-speech with ElevenLabs for perfect African language pronunciation."""
+    if not ELEVENLABS_API_KEY:
+        raise Exception("ELEVENLABS_API_KEY not configured")
+    from elevenlabs import ElevenLabs
+    client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+    voice_id = ELEVENLABS_VOICE_MAP.get(langue, ELEVENLABS_VOICE_MAP["fr"])
+    audio_generator = client.generate(
+        text=text,
+        voice=voice_id,
+        model="eleven_multilingual_v2",
+    )
+    audio_bytes = b""
+    for chunk in audio_generator:
+        audio_bytes += chunk
+    return audio_bytes
+
 
 async def _edge_tts(text: str, langue: str) -> bytes:
+    """Synthesize speech using Microsoft Edge TTS with SSML for natural pauses."""
     import edge_tts
     voice_map = {
         "fr": "fr-FR-DeniseNeural",
@@ -87,7 +133,24 @@ async def _edge_tts(text: str, langue: str) -> bytes:
         "en": "en-US-AriaNeural",
     }
     voice = voice_map.get(langue, "fr-FR-DeniseNeural")
-    communicate = edge_tts.Communicate(text, voice)
+
+    ssml_text = (
+        text.replace(". ", '.<break time="450ms"/> ')
+        .replace("? ", '?<break time="550ms"/> ')
+        .replace("! ", '!<break time="550ms"/> ')
+        .replace(": ", ':<break time="350ms"/> ')
+        .replace(", ", ',<break time="250ms"/> ')
+    )
+
+    ssml = f"""<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="{langue}">
+        <voice name="{voice}">
+            <prosody rate="0.85" pitch="+0Hz">
+                {ssml_text}
+            </prosody>
+        </voice>
+    </speak>"""
+
+    communicate = edge_tts.Communicate(ssml, voice)
     audio_bytes = b""
     async for chunk in communicate.stream():
         if chunk["type"] == "audio":
@@ -96,26 +159,34 @@ async def _edge_tts(text: str, langue: str) -> bytes:
 
 
 async def _gtts(text: str, langue: str) -> bytes:
+    """gTTS fallback if both ElevenLabs and Edge TTS fail."""
     from gtts import gTTS
     lang_map = {"fr": "fr", "ln": "fr", "sw": "sw", "en": "en"}
+    clean_text = text.replace(". ", ".   ").replace("? ", "?   ").replace(", ", ",  ")
     mp3_buffer = io.BytesIO()
-    tts = gTTS(text=text, lang=lang_map.get(langue, "fr"), slow=False)
+    tts = gTTS(text=clean_text, lang=lang_map.get(langue, "fr"), slow=True)
     tts.write_to_fp(mp3_buffer)
     mp3_buffer.seek(0)
     return mp3_buffer.read()
 
 
 async def _text_to_speech(text: str, langue: str) -> bytes:
+    """TTS with ElevenLabs primary, Edge TTS secondary, gTTS fallback."""
+    normalized_text = _normalize_phonetic(text, langue)
+
+    if ELEVENLABS_API_KEY:
+        try:
+            return await _elevenlabs_tts(normalized_text, langue)
+        except Exception as e:
+            logger.warning("elevenlabs_tts_failed_falling_back_to_edge", error=str(e))
     try:
-        return await _edge_tts(text, langue)
+        return await _edge_tts(normalized_text, langue)
     except Exception as e:
         logger.warning("edge_tts_fallback", error=str(e))
-        return await _gtts(text, langue)
+        return await _gtts(normalized_text, langue)
 
 
-# ─── Long-term memory helpers ─────────────────────────────────────────────
-
-HISTORY_KEY_PREFIX  = "voice_history:"
+HISTORY_KEY_PREFIX = "voice_history:"
 MAX_STORED_MESSAGES = 100
 
 
@@ -141,8 +212,6 @@ def _save_voice_history(
         logger.error("save_voice_history_error", error=str(e))
 
 
-# ─── Routes ───────────────────────────────────────────────────────────────
-
 @router.post("/voice-chat")
 @limiter.limit("20/minute")
 async def voice_chat(
@@ -150,13 +219,6 @@ async def voice_chat(
     body: VoiceChatRequest,
     memory_repo: MemoryRepository = Depends(get_memory_repository),
 ):
-    """
-    Voice chat pipeline:
-    1. Whisper transcription
-    2. Llama response with full conversation history
-    3. TTS audio synthesis
-    The response language is determined by body.langue.
-    """
     session_id = body.identifiant_session or "voice_default"
 
     try:
@@ -169,7 +231,6 @@ async def voice_chat(
         )
 
     try:
-        # ── Decode audio ──────────────────────────────────────────────────
         audio_data = body.audio_base64
         if "base64," in audio_data:
             audio_data = audio_data.split("base64,")[1]
@@ -181,7 +242,6 @@ async def voice_chat(
                 status_code=400,
             )
 
-        # ── Step 1: Whisper Transcription ─────────────────────────────────
         tmp = tempfile.NamedTemporaryFile(suffix=".m4a", delete=False)
         tmp.write(audio_bytes)
         tmp.close()
@@ -210,10 +270,8 @@ async def voice_chat(
 
         logger.info("whisper_ok", text=child_text[:80], session=session_id)
 
-        # ── Load persistent history ───────────────────────────────────────
         history = _load_voice_history(memory_repo, session_id)
 
-        # ── Step 2: Llama response with MULTILINGUAL system prompt ────────
         system_prompt = get_voice_system_prompt(body.langue)
 
         api_messages = [{"role": "system", "content": system_prompt}]
@@ -239,12 +297,10 @@ async def voice_chat(
         if not soma_text:
             soma_text = get_voice_fallback(body.langue)
 
-        # ── Update and save history ───────────────────────────────────────
         history.append({"role": "user", "content": child_text})
         history.append({"role": "assistant", "content": soma_text})
         asyncio.create_task(asyncio.to_thread(_save_voice_history, memory_repo, session_id, history))
 
-        # ── Step 3: Voice synthesis ───────────────────────────────────────
         try:
             audio_mp3 = await _text_to_speech(soma_text, body.langue)
         except Exception as e:
@@ -274,10 +330,6 @@ async def send_message(
     chat_service: ChatService = Depends(get_chat_service),
     memory_repo: MemoryRepository = Depends(get_memory_repository),
 ):
-    """
-    Send a text message to the AI tutor.
-    The response language is determined by body.langue.
-    """
     try:
         session_id = body.identifiant_session or body.session_id or f"session_{int(time.time())}"
         if not body.message or not body.message.strip():
@@ -291,7 +343,6 @@ async def send_message(
             except Exception:
                 history = []
 
-        # Pass language to chat service
         response, updated_history = await chat_service.send_message(
             message=body.message.strip(),
             language=body.langue,
@@ -321,7 +372,6 @@ async def send_message(
 @router.post("/tts")
 @limiter.limit("30/minute")
 async def text_to_speech(request: Request, body: TTSRequest):
-    """Convert text to speech in the requested language."""
     try:
         audio_mp3 = await _text_to_speech(body.text, body.langue)
         return JSONResponse(content={
@@ -338,7 +388,6 @@ async def create_chat_session(
     child_id: Optional[str] = None,
     chat_service: ChatService = Depends(get_chat_service),
 ):
-    """Create a new chat session."""
     session_id = chat_service.create_session(child_id=child_id)
     return JSONResponse(
         content={"success": True, "data": {"session_id": session_id, "child_id": child_id}},
@@ -352,7 +401,6 @@ async def get_chat_history(
     limit: int = 50,
     chat_service: ChatService = Depends(get_chat_service),
 ):
-    """Get conversation history for a session."""
     try:
         history = chat_service.get_conversation_history(session_id=session_id, limit=limit)
         if not history:
@@ -374,7 +422,6 @@ async def get_voice_history(
     limit: int = 50,
     memory_repo: MemoryRepository = Depends(get_memory_repository),
 ):
-    """Get voice conversation history for a session."""
     try:
         messages = _load_voice_history(memory_repo, session_id)
         if not messages:
