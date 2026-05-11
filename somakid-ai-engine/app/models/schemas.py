@@ -249,8 +249,8 @@ class ReponseQuizRequete(BaseModel):
     temps_reponse_ms: Optional[int] = Field(default=None, description="Response time in ms")
     identifiant_session: str = Field(description="Session ID")
     identifiant_enfant: Optional[str] = Field(default=None, description="Child ID")
-
-
+    langue: str = Field(default="fr", description="Language for result message")
+    
 class ResultatQuiz(BaseModel):
     """Schema for quiz answer result."""
     est_correcte: bool = Field(description="Whether answer is correct")
