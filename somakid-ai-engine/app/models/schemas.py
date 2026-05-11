@@ -17,6 +17,7 @@ from enum import Enum
 class LanguageEnum(str, Enum):
     """Supported languages for SOMAKID AI."""
     FRENCH = "fr"
+    ENGLISH = "en"
     LINGALA = "ln"
     SWAHILI = "sw"
 
@@ -250,7 +251,8 @@ class ReponseQuizRequete(BaseModel):
     identifiant_session: str = Field(description="Session ID")
     identifiant_enfant: Optional[str] = Field(default=None, description="Child ID")
     langue: str = Field(default="fr", description="Language for result message")
-    
+
+
 class ResultatQuiz(BaseModel):
     """Schema for quiz answer result."""
     est_correcte: bool = Field(description="Whether answer is correct")
