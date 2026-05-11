@@ -1,7 +1,7 @@
 /**
  * SOMAKID AI - Quiz Screen
  * Interactive quiz with voice feedback, subject selection, and elegant animations.
- * Full i18n integration with instant language switching.
+ * Subjects reload automatically when user changes language.
  */
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
@@ -17,16 +17,13 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ErrorDisplay } from '../../components/ui/ErrorDisplay';
 import { formatPoints } from '../../utils/formatting';
 import { aiEngineClient } from '../../services/api/client';
-import { getCurrentLanguage } from '../../i18n';
+import { getCurrentLanguage, onLanguageChange } from '../../i18n';
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../constants/theme';
 import { QuizSubject } from '../../types/api.types';
 import Svg, { Path } from 'react-native-svg';
 
 const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 68;
 const BOTTOM_SAFE_AREA = Platform.OS === 'android' ? 24 : 0;
-
-// Utiliser les langues supportées par l'API (sans 'en' si pas supporté par le backend)
-type SupportedLanguage = 'fr' | 'ln' | 'sw';
 
 async function playAudioDirect(base64: string): Promise<void> {
   if (!base64 || base64.length < 100) return;
@@ -52,7 +49,7 @@ async function playAudioDirect(base64: string): Promise<void> {
   }
 }
 
-async function speakText(text: string, langue: SupportedLanguage = 'fr'): Promise<void> {
+async function speakText(text: string, langue: string = 'fr'): Promise<void> {
   try {
     const res = await aiEngineClient.post('/chat/tts', {
       text,
@@ -265,47 +262,56 @@ export default function QuizScreen() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isReadingQuestion, setIsReadingQuestion] = useState(false);
   const explanationSpokenRef = useRef<string | null>(null);
+  const currentLangRef = useRef<string>(getCurrentLanguage());
 
-  // Charger les sujets dans la langue courante
   useEffect(() => {
-    const currentLang = getCurrentLanguage() as SupportedLanguage;
-    loadSubjects(currentLang);
+    const loadForLanguage = (lang: string) => {
+      currentLangRef.current = lang;
+      loadSubjects(lang as any);
+    };
+
+    loadForLanguage(getCurrentLanguage());
+
+    const unsubscribe = onLanguageChange((lang: string) => {
+      loadForLanguage(lang);
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
-  // Lecture automatique de l'explication
   useEffect(() => {
     if (!showExplanation || !currentQuestion) return;
     const key = `${currentQuestion.id}-${isCurrentAnswerCorrect}`;
     if (explanationSpokenRef.current === key) return;
     explanationSpokenRef.current = key;
 
-    const currentLang = (getCurrentLanguage() === 'en' ? 'fr' : getCurrentLanguage()) as SupportedLanguage;
+    const lang = currentLangRef.current;
     const feedback = isCurrentAnswerCorrect
       ? `${t('quiz.correct')}! ${currentQuestion.explanation}`
       : `${t('quiz.incorrect')}. ${currentQuestion.explanation}`;
 
     setIsSpeaking(true);
-    speakText(feedback, currentLang).finally(() => setIsSpeaking(false));
+    speakText(feedback, lang).finally(() => setIsSpeaking(false));
   }, [showExplanation, currentQuestion?.id, t]);
 
-  // Réécouter la question
   const handleReplayQuestion = useCallback(async () => {
     if (!currentQuestion) return;
     setIsReadingQuestion(true);
-    const currentLang = (getCurrentLanguage() === 'en' ? 'fr' : getCurrentLanguage()) as SupportedLanguage;
+    const lang = currentLangRef.current;
     if (currentQuestion.audioBase64 && currentQuestion.audioBase64.length > 100) {
       await playAudioDirect(currentQuestion.audioBase64);
     } else {
-      await speakText(currentQuestion.question, currentLang);
+      await speakText(currentQuestion.question, lang);
     }
     setIsReadingQuestion(false);
   }, [currentQuestion]);
 
-  // Démarrer le quiz dans la langue courante
   const handleStartQuiz = useCallback(() => {
     if (selectedSubject) {
-      const currentLang = (getCurrentLanguage() === 'en' ? 'fr' : getCurrentLanguage()) as SupportedLanguage;
-      startQuiz(selectedSubject as QuizSubject, difficultyLevel, currentLang);
+      const lang = currentLangRef.current;
+      startQuiz(selectedSubject as QuizSubject, difficultyLevel, lang as any);
     }
   }, [selectedSubject, difficultyLevel, startQuiz]);
 
@@ -317,7 +323,6 @@ export default function QuizScreen() {
         keyboardShouldPersistTaps="handled"
         bounces={true}
       >
-        {/* ── Header ── */}
         <LinearGradient
           colors={[Colors.gradients.quizStart, Colors.gradients.quizEnd]}
           style={styles.header}
@@ -341,10 +346,8 @@ export default function QuizScreen() {
         </LinearGradient>
 
         <View style={styles.content}>
-          {/* ── Erreur ── */}
           {error && <ErrorDisplay message={error} onRetry={() => clearError()} />}
 
-          {/* ── Sélection du sujet ── */}
           {!hasQuestion && !isGenerating && !error && (
             <>
               <Text style={styles.sectionTitle}>{t('quiz.chooseSubject')}</Text>
@@ -400,7 +403,6 @@ export default function QuizScreen() {
             </>
           )}
 
-          {/* ── Génération de question ── */}
           {isGenerating && (
             <View style={styles.generatingContainer}>
               <LoadingSpinner
@@ -410,7 +412,6 @@ export default function QuizScreen() {
             </View>
           )}
 
-          {/* ── Question en cours ── */}
           {hasQuestion && !isGenerating && (
             <>
               {isReadingQuestion && (
@@ -497,7 +498,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.gray100 },
   scroll: { flexGrow: 1 },
 
-  // ── Header ──
   header: { padding: Spacing.xl, paddingTop: Spacing.lg },
   headerContent: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.sm },
   headerTitle: {
@@ -514,7 +514,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // ── Content ──
   content: { padding: Spacing.base },
   sectionTitle: {
     fontSize: 18,
@@ -524,7 +523,6 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
   },
 
-  // ── Generating ──
   generatingContainer: {
     backgroundColor: Colors.white,
     borderRadius: BorderRadius['2xl'],
@@ -535,7 +533,6 @@ const styles = StyleSheet.create({
     ...Shadows.md,
   },
 
-  // ── Subjects ──
   subjectGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   subjectCard: {
     width: '47%',
@@ -558,7 +555,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // ── Difficulty ──
   levelRow: { flexDirection: 'row', gap: Spacing.sm, flexWrap: 'wrap' },
   levelButton: {
     paddingHorizontal: Spacing.md,
@@ -571,7 +567,6 @@ const styles = StyleSheet.create({
   },
   levelButtonText: { fontSize: 14 },
 
-  // ── Start Button ──
   startButton: {
     borderRadius: BorderRadius.xl,
     overflow: 'hidden',
@@ -585,7 +580,6 @@ const styles = StyleSheet.create({
     color: Colors.white,
   },
 
-  // ── Quiz Card ──
   quizCard: {
     backgroundColor: Colors.white,
     borderRadius: BorderRadius['2xl'],
@@ -617,7 +611,6 @@ const styles = StyleSheet.create({
     lineHeight: 28,
   },
 
-  // ── Options ──
   optionsContainer: { gap: Spacing.sm },
   option: {
     flexDirection: 'row',
@@ -658,7 +651,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // ── Explanation ──
   explanationCard: {
     borderRadius: BorderRadius.lg,
     padding: Spacing.md,
@@ -680,7 +672,6 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
 
-  // ── Replay ──
   replayButton: {
     marginTop: Spacing.sm,
     padding: Spacing.sm,
@@ -699,7 +690,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // ── Badges ──
   readingBadge: {
     backgroundColor: '#EBF8FF',
     borderRadius: BorderRadius.md,
@@ -729,7 +719,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // ── Tap Hint ──
   tapHint: {
     marginTop: Spacing.md,
     padding: Spacing.md,
@@ -746,7 +735,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // ── Next / Reset ──
   nextButton: {
     flexDirection: 'row',
     backgroundColor: Colors.white,
