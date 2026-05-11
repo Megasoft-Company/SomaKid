@@ -3,6 +3,7 @@ SOMAKID AI Engine - Quiz Routes (Full Multilingual)
 - Groq API key from environment variable
 - Fallback TTS if Groq unavailable
 - Voice quiz pipeline with multilingual support
+- Question/Option labels translated per language
 """
 
 from typing import Optional, List
@@ -25,6 +26,14 @@ from ...utils.prompts import get_voice_quiz_response
 
 logger = get_logger(__name__)
 router = APIRouter()
+
+# Multilingual labels for audio generation
+_AUDIO_LABELS = {
+    "fr": {"question": "Question", "option": "Option"},
+    "en": {"question": "Question", "option": "Option"},
+    "ln": {"question": "Motuna", "option": "Eyano"},
+    "sw": {"question": "Swali", "option": "Chaguo"},
+}
 
 
 def _get_groq_client():
@@ -181,12 +190,18 @@ async def generate_quiz_question(
         )
         data = question.model_dump()
 
+        # Get translated labels
+        labels = _AUDIO_LABELS.get(body.langue, _AUDIO_LABELS["fr"])
+        question_label = labels["question"]
+        option_label = labels["option"]
+
+        # Build audio text with translated labels
         option_texts = " ".join(
-            f"Option {label} : {text}"
-            for label, text in zip(["A", "B", "C", "D"], question.options)
+            f"{option_label} {letter} : {text}"
+            for letter, text in zip(["A", "B", "C", "D"], question.options)
             if text
         )
-        question_audio_text = f"Question. {question.question}. {option_texts}."
+        question_audio_text = f"{question_label}. {question.question}. {option_texts}."
         try:
             audio_mp3 = await _tts(question_audio_text, body.langue)
             data["audio_base64"] = base64.b64encode(audio_mp3).decode("utf-8")
