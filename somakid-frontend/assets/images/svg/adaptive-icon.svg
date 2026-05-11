@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SOMAKID AI | Adaptive Icon foreground 1024×1024 (Android) transparent bg -->
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="leafDark" x1="20%" y1="0%" x2="80%" y2="100%">
+    <stop offset="0%" stop-color="#2d7a52"/><stop offset="100%" stop-color="#0d3d28"/>
+  </linearGradient>
+  <linearGradient id="leafLight" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" stop-color="#5eca90"/><stop offset="100%" stop-color="#2d7a52"/>
+  </linearGradient>
+  <linearGradient id="birdBody" x1="0%" y1="0%" x2="60%" y2="100%">
+    <stop offset="0%" stop-color="#f5c842"/><stop offset="100%" stop-color="#e0a020"/>
+  </linearGradient>
+  <linearGradient id="birdWing" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" stop-color="#e8b030"/><stop offset="100%" stop-color="#c8880a"/>
+  </linearGradient>
+  <filter id="glow">
+    <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+    <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+</defs>
+
+<!-- Leaf / plant body -->
+<g transform="translate(512,530) scale(1.62) translate(-700,-370)">
+  <path d="M700 115 C700 115 608 134 574 196 C547 244 558 292 546 326 C531 372 494 402 490 450 C484 498 510 540 534 560 C550 572 570 576 584 572 C584 572 574 546 578 526 C582 506 602 496 610 476 C615 460 607 434 616 416 C628 392 652 382 660 368 C668 352 660 326 665 308 C674 280 700 262 700 262 C700 262 726 280 735 308 C740 326 732 352 740 368 C748 382 772 392 784 416 C793 434 785 460 790 476 C798 496 818 506 822 526 C826 546 816 572 816 572 C830 576 850 572 866 560 C890 540 916 498 910 450 C904 402 867 372 852 326 C840 292 851 244 824 196 C790 134 700 115 700 115 Z" fill="url(#leafDark)" opacity="0.95"/>
+  <path d="M700 118 C700 118 724 144 736 176 C750 212 736 250 740 284 C746 320 766 342 778 368 C792 398 786 432 790 458 C794 482 812 498 814 520 C816 538 810 562 810 562 C826 556 846 542 858 520 C878 486 882 448 872 414 C860 376 832 340 828 302 C824 264 836 228 818 186 C796 140 728 116 700 118 Z" fill="url(#leafLight)" opacity="0.85"/>
+  <path d="M700 128 L700 578" fill="none" stroke="#7dd8a8" stroke-width="3" opacity="0.55"/>
+  <path d="M700 226 Q656 258 618 286" fill="none" stroke="#7dd8a8" stroke-width="2" opacity="0.45"/>
+  <path d="M700 298 Q644 328 608 348" fill="none" stroke="#7dd8a8" stroke-width="2" opacity="0.45"/>
+  <path d="M700 368 Q646 396 608 412" fill="none" stroke="#7dd8a8" stroke-width="2" opacity="0.45"/>
+  <path d="M700 226 Q744 258 782 286" fill="none" stroke="#7dd8a8" stroke-width="2" opacity="0.45"/>
+  <path d="M700 298 Q756 328 792 348" fill="none" stroke="#7dd8a8" stroke-width="2" opacity="0.45"/>
+  <path d="M700 368 Q754 396 792 412" fill="none" stroke="#7dd8a8" stroke-width="2" opacity="0.45"/>
+  <path d="M700 440 Q748 464 778 476" fill="none" stroke="#7dd8a8" stroke-width="2" opacity="0.45"/>
+  <path d="M626 362 C620 338 606 322 596 332 C584 344 590 372 604 388 C616 402 630 400 632 390 C634 376 630 368 626 362 Z" fill="#0e4a2e" opacity="0.8"/>
+  <path d="M774 362 C780 338 794 322 804 332 C816 344 810 372 796 388 C784 402 770 400 768 390 C766 376 770 368 774 362 Z" fill="#0e4a2e" opacity="0.8"/>
+  <line x1="756" y1="318" x2="864" y2="318" stroke="#5eca90" stroke-width="3" opacity="0.9"/>
+  <line x1="864" y1="318" x2="864" y2="386" stroke="#5eca90" stroke-width="3" opacity="0.9"/>
+  <line x1="780" y1="386" x2="886" y2="386" stroke="#5eca90" stroke-width="3" opacity="0.9"/>
+  <line x1="886" y1="386" x2="886" y2="448" stroke="#5eca90" stroke-width="3" opacity="0.9"/>
+  <line x1="756" y1="448" x2="906" y2="448" stroke="#5eca90" stroke-width="3" opacity="0.9"/>
+  <line x1="906" y1="448" x2="906" y2="496" stroke="#5eca90" stroke-width="3" opacity="0.9"/>
+  <line x1="752" y1="496" x2="916" y2="496" stroke="#5eca90" stroke-width="3" opacity="0.9"/>
+  <circle cx="864" cy="318" r="9" fill="#5eca90"/>
+  <circle cx="864" cy="386" r="9" fill="#5eca90"/>
+  <circle cx="886" cy="386" r="7" fill="#5eca90"/>
+  <circle cx="886" cy="448" r="9" fill="#5eca90"/>
+  <circle cx="906" cy="448" r="7" fill="#5eca90"/>
+  <circle cx="906" cy="496" r="9" fill="#5eca90"/>
+  <circle cx="756" cy="318" r="8" fill="#a8f0cc"/>
+  <circle cx="780" cy="386" r="8" fill="#a8f0cc"/>
+  <circle cx="756" cy="448" r="8" fill="#a8f0cc"/>
+  <circle cx="752" cy="496" r="8" fill="#a8f0cc"/>
+  <ellipse cx="824" cy="232" rx="58" ry="42" fill="url(#birdBody)"/>
+  <circle cx="876" cy="206" r="32" fill="#f5c842"/>
+  <path d="M906 200 L930 206 L906 212 Z" fill="#e07c10"/>
+  <circle cx="884" cy="198" r="6.5" fill="#2d1a00"/>
+  <circle cx="886" cy="196" r="2" fill="white" opacity="0.7"/>
+  <path d="M778 222 C752 204 740 232 756 252 C770 270 800 266 818 248 C836 230 840 208 818 202 C800 198 786 212 778 222 Z" fill="url(#birdWing)"/>
+  <path d="M775 248 C753 268 742 278 748 266 C754 252 766 248 775 248 Z" fill="#e0a020"/>
+  <line x1="814" y1="268" x2="804" y2="292" stroke="#c87010" stroke-width="3"/>
+  <line x1="832" y1="272" x2="824" y2="296" stroke="#c87010" stroke-width="3"/>
+</g>
+</svg>

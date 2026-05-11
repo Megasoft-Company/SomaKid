@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SOMAKID AI | Favicon 32×32 simplified -->
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" stop-color="#0f5038"/><stop offset="100%" stop-color="#073020"/>
+  </linearGradient>
+  <linearGradient id="lD" x1="20%" y1="0%" x2="80%" y2="100%">
+    <stop offset="0%" stop-color="#2d7a52"/><stop offset="100%" stop-color="#0d3d28"/>
+  </linearGradient>
+  <linearGradient id="lL" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" stop-color="#5eca90"/><stop offset="100%" stop-color="#2d7a52"/>
+  </linearGradient>
+</defs>
+<rect width="32" height="32" rx="6" fill="url(#bg)"/>
+<!-- Simplified leaf -->
+<g transform="translate(16,17) scale(0.046) translate(-700,-370)">
+  <path d="M700 115 C700 115 608 134 574 196 C547 244 558 292 546 326 C531 372 494 402 490 450 C484 498 510 540 534 560 C550 572 570 576 584 572 C584 572 574 546 578 526 C582 506 602 496 610 476 C615 460 607 434 616 416 C628 392 652 382 660 368 C668 352 660 326 665 308 C674 280 700 262 700 262 C700 262 726 280 735 308 C740 326 732 352 740 368 C748 382 772 392 784 416 C793 434 785 460 790 476 C798 496 818 506 822 526 C826 546 816 572 816 572 C830 576 850 572 866 560 C890 540 916 498 910 450 C904 402 867 372 852 326 C840 292 851 244 824 196 C790 134 700 115 700 115 Z" fill="url(#lD)"/>
+  <path d="M700 118 C700 118 724 144 736 176 C750 212 736 250 740 284 C746 320 766 342 778 368 C792 398 786 432 790 458 C794 482 812 498 814 520 C816 538 810 562 810 562 C826 556 846 542 858 520 C878 486 882 448 872 414 C860 376 832 340 828 302 C824 264 836 228 818 186 C796 140 728 116 700 118 Z" fill="url(#lL)" opacity="0.85"/>
+  <!-- Tiny bird dot -->
+  <circle cx="845" cy="220" r="35" fill="#f5c842"/>
+</g>
+</svg>

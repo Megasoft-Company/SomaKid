@@ -1,0 +1,40 @@
+# =============================================================================
+# SOMAKID AI Engine - Python Dependencies
+# Intelligent Tutor for Climate, Biodiversity and Children's Resilience
+# =============================================================================
+
+# --- Core Framework -----------------------------------------------------------
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+pydantic-settings==2.5.2
+
+# --- Artificial Intelligence --------------------------------------------------
+google-generativeai==0.8.3
+
+# --- Image Processing ---------------------------------------------------------
+Pillow==10.4.0
+python-multipart==0.0.12
+
+# --- Database & Cache ---------------------------------------------------------
+redis==5.1.1
+sqlalchemy==2.0.35
+alembic==1.13.3
+asyncpg==0.29.0
+
+# --- Security -----------------------------------------------------------------
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+slowapi==0.1.9
+limits==3.13.0
+
+# --- HTTP & Network -----------------------------------------------------------
+httpx==0.27.2
+tenacity==9.0.0
+
+# --- Monitoring & Observability -----------------------------------------------
+prometheus-fastapi-instrumentator==7.0.0
+structlog==24.4.0
+
+# --- Utilities ----------------------------------------------------------------
+python-dotenv==1.0.1
