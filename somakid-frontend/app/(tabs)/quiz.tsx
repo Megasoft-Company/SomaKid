@@ -1,5 +1,5 @@
 /**
- * SOMAKID AI - Quiz Screen (Professional UI/UX - Green Theme)
+ * SOMAKID AI - Quiz Screen
  * Interactive quiz with voice feedback, subject selection, and elegant animations.
  * Full i18n integration with instant language switching.
  */
