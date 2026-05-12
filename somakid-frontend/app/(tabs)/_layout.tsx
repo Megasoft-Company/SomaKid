@@ -4,13 +4,27 @@ import { View, Text, StyleSheet, Platform } from 'react-native';
 import { Colors, Shadows, BorderRadius } from '../../constants/theme';
 import Svg, { Path } from 'react-native-svg';
 
-// --- Professional SVG Icons ---
-
 function HomeIcon({ color, focused }: { color: string; focused: boolean }) {
   return (
     <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={focused ? 2.5 : 2} strokeLinecap="round" strokeLinejoin="round">
       <Path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
       <Path d="M9 22V12h6v10" />
+    </Svg>
+  );
+}
+
+function LearnIcon({ color, focused }: { color: string; focused: boolean }) {
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={focused ? 2.5 : 2} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M12 2a9 9 0 1 0 0 18 9 9 0 0 0 0-18z" />
+      <Path d="M12 2v4" />
+      <Path d="M12 18v4" />
+      <Path d="M4.93 4.93l2.83 2.83" />
+      <Path d="M16.24 16.24l2.83 2.83" />
+      <Path d="M2 12h4" />
+      <Path d="M18 12h4" />
+      <Path d="M4.93 19.07l2.83-2.83" />
+      <Path d="M16.24 7.76l2.83-2.83" />
     </Svg>
   );
 }
@@ -49,18 +63,12 @@ function ProfileIcon({ color, focused }: { color: string; focused: boolean }) {
   );
 }
 
-// --- Tab Icon Component ---
-
 function TabIcon({ Icon, label, focused, color }: { Icon: React.FC<{ color: string; focused: boolean }>; label: string; focused: boolean; color: string }) {
   return (
     <View style={[styles.tabItem, focused && { backgroundColor: color + '15' }]}>
       <Icon color={focused ? color : Colors.gray400} focused={focused} />
       {focused && (
-        <Text
-          style={[styles.label, { color }]}
-          numberOfLines={1}
-          ellipsizeMode="tail"
-        >
+        <Text style={[styles.label, { color }]} numberOfLines={1} ellipsizeMode="tail">
           {label}
         </Text>
       )}
@@ -83,6 +91,14 @@ export default function TabLayout() {
         options={{
           tabBarIcon: ({ focused }) => (
             <TabIcon Icon={HomeIcon} label="Home" focused={focused} color={Colors.primary} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="learn"
+        options={{
+          tabBarIcon: ({ focused }) => (
+            <TabIcon Icon={LearnIcon} label="Learn" focused={focused} color="#8B5CF6" />
           ),
         }}
       />

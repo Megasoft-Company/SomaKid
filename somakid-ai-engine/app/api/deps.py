@@ -14,6 +14,8 @@ from ..services.vision_service import VisionService
 from ..services.quiz_service import QuizService
 from ..services.chat_service import ChatService
 from ..services.progression_service import ProgressionService
+from ..services.learning_service import LearningService
+from ..services.lesson_service import LessonService
 from ..repositories.memory_repository import MemoryRepository
 from ..repositories.knowledge_repository import KnowledgeRepository
 
@@ -23,6 +25,8 @@ _vision_service: Optional[VisionService] = None
 _quiz_service: Optional[QuizService] = None
 _chat_service: Optional[ChatService] = None
 _progression_service: Optional[ProgressionService] = None
+_learning_service: Optional[LearningService] = None
+_lesson_service: Optional[LessonService] = None
 _memory_repository: Optional[MemoryRepository] = None
 _knowledge_repository: Optional[KnowledgeRepository] = None
 
@@ -85,6 +89,28 @@ def get_progression_service(
     if _progression_service is None:
         _progression_service = ProgressionService(memory_repo=memory_repo)
     return _progression_service
+
+
+def get_learning_service(
+    gemini_client: GeminiClient = Depends(get_gemini_client),
+    memory_repo: MemoryRepository = Depends(get_memory_repository),
+) -> LearningService:
+    """Dependency injection for LearningService."""
+    global _learning_service
+    if _learning_service is None:
+        _learning_service = LearningService(gemini_client=gemini_client, memory_repo=memory_repo)
+    return _learning_service
+
+
+def get_lesson_service(
+    gemini_client: GeminiClient = Depends(get_gemini_client),
+    memory_repo: MemoryRepository = Depends(get_memory_repository),
+) -> LessonService:
+    """Dependency injection for LessonService."""
+    global _lesson_service
+    if _lesson_service is None:
+        _lesson_service = LessonService(gemini_client=gemini_client, memory_repo=memory_repo)
+    return _lesson_service
 
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(bearer_security)) -> dict:

@@ -67,7 +67,7 @@ Open-source solution dedicated to bridging the educational gap in vulnerable reg
 
 ```bash
 # Clone the repository
-git clone https://github.com/somakid/mobile-app.git
+git clone https://github.com/somakid/somakid-frontend.git
 cd mobile-app
 
 # Install dependencies
