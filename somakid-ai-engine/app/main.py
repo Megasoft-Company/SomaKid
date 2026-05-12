@@ -25,6 +25,7 @@ from .api.routes import quiz as quiz_routes
 from .api.routes import chat as chat_routes
 from .api.routes import voice as voice_routes
 from .api.routes import progression as progression_routes
+from .api.routes import learning as learning_routes
 
 
 # =============================================================================
@@ -80,13 +81,15 @@ app = FastAPI(
         "AI-powered educational platform for climate awareness, "
         "biodiversity education, and children's resilience.\n\n"
         "## Core Modules\n"
+        "- **Learning Paths**: Duolingo-style structured courses\n"
         "- **Biodiversity Explorer**: Species identification from images\n"
-        "- **Climate Resilience Academy**: Gamified educational quizzes\n"
+        "- **Climate Academy**: Gamified educational quizzes\n"
         "- **SOMA Tutor Chat**: Interactive AI conversations\n"
         "- **Voice Support**: Text-to-speech and speech-to-text\n"
         "- **Progression Tracking**: Learning progress and achievements\n\n"
         "## Supported Languages\n"
         "- French (fr)\n"
+        "- English (en)\n"
         "- Lingala (ln)\n"
         "- Swahili (sw)"
     ),
@@ -191,6 +194,7 @@ async def root(request: Request):
         "documentation": "/docs" if settings.is_development else None,
         "health": "/health",
         "modules": [
+            {"name": "Learning Paths", "prefix": "/api/v1/learning"},
             {"name": "Biodiversity Explorer", "prefix": "/api/v1/vision"},
             {"name": "Climate Academy", "prefix": "/api/v1/quiz"},
             {"name": "SOMA Chat", "prefix": "/api/v1/chat"},
@@ -221,6 +225,7 @@ app.include_router(quiz_routes.router, prefix="/api/v1/quiz", tags=["Quiz - Clim
 app.include_router(chat_routes.router, prefix="/api/v1/chat", tags=["Chat - SOMA Tutor"])
 app.include_router(voice_routes.router, prefix="/api/v1/voice", tags=["Voice - TTS & STT"])
 app.include_router(progression_routes.router, prefix="/api/v1/progression", tags=["Progression - Tracking"])
+app.include_router(learning_routes.router, prefix="/api/v1/learning", tags=["Learning - Duolingo-Style"])
 
 
 # =============================================================================
