@@ -58,10 +58,7 @@ def _fix_pronunciation(text: str) -> str:
 
 
 def _normalize_phonetic(text: str, langue: str) -> str:
-    """
-    Normalize text for better pronunciation in African languages.
-    Replaces special characters with phonetic equivalents that TTS engines pronounce correctly.
-    """
+    """Normalize text for better pronunciation in African languages."""
     if langue == "ln":
         phonetic_map = {
             "ɛ": "e", "ɔ": "o", "á": "a", "é": "e", "í": "i",
@@ -85,10 +82,7 @@ def _normalize_phonetic(text: str, langue: str) -> str:
 
 
 def _add_natural_pauses(text: str) -> str:
-    """
-    Add natural pauses between sentences and phrases.
-    Uses spacing and punctuation to create breathing room in speech.
-    """
+    """Add natural pauses between sentences and phrases."""
     text = text.replace(". ", ".   ")
     text = text.replace("? ", "?   ")
     text = text.replace("! ", "!   ")
@@ -104,27 +98,16 @@ def _add_natural_pauses(text: str) -> str:
 
 
 def _clean_text_for_tts(text: str, langue: str) -> str:
-    """
-    Nettoyage complet du texte pour TTS:
-    1. Correction phonétique des mots problématiques
-    2. Normalisation des caractères spéciaux
-    3. Suppression des caractères indésirables
-    """
-    # Correction de la prononciation
+    """Nettoyage complet du texte pour TTS."""
     text = _fix_pronunciation(text)
-    
-    # Normalisation phonétique pour les langues africaines
     text = _normalize_phonetic(text, langue)
-    
-    # Suppression des caractères problématiques
     text = re.sub(r'[#*_~|`]', '', text)
     text = re.sub(r'\s+', ' ', text)
-    
     return text.strip()
 
 
 async def _elevenlabs_tts(text: str, langue: str) -> bytes:
-    """Text-to-speech with ElevenLabs for perfect African language pronunciation."""
+    """Text-to-speech with ElevenLabs."""
     if not ELEVENLABS_API_KEY:
         raise Exception("ELEVENLABS_API_KEY not configured")
     from elevenlabs import ElevenLabs
@@ -146,10 +129,7 @@ async def _elevenlabs_tts(text: str, langue: str) -> bytes:
 
 
 async def _edge_tts(text: str, langue: str) -> bytes:
-    """
-    Synthesize speech using Microsoft Edge TTS with optimized SSML.
-    Vitesse augmentée à 1.15 (15% plus rapide) pour une écoute naturelle.
-    """
+    """Synthesize speech using Microsoft Edge TTS with optimized SSML."""
     import edge_tts
     
     voice_map = {
@@ -160,10 +140,8 @@ async def _edge_tts(text: str, langue: str) -> bytes:
     }
     voice = voice_map.get(langue, "fr-FR-DeniseNeural")
 
-    # Nettoyer le texte
     clean_text = _clean_text_for_tts(text, langue)
     
-    # Ajouter des pauses naturelles
     ssml_text = clean_text
     ssml_text = ssml_text.replace(". ", '.<break time="400ms"/> ')
     ssml_text = ssml_text.replace("? ", '?<break time="500ms"/> ')
@@ -171,7 +149,6 @@ async def _edge_tts(text: str, langue: str) -> bytes:
     ssml_text = ssml_text.replace(": ", ':<break time="300ms"/> ')
     ssml_text = ssml_text.replace(", ", ',<break time="150ms"/> ')
 
-    # SSML avec vitesse augmentée (1.15 = 15% plus rapide)
     ssml = f"""<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="http://www.w3.org/2001/mstts" xml:lang="{langue}">
         <voice name="{voice}">
             <mstts:express-as style="cheerful" styledegree="1.2">
@@ -191,7 +168,7 @@ async def _edge_tts(text: str, langue: str) -> bytes:
 
 
 async def _gtts_fallback(text: str, langue: str) -> bytes:
-    """gTTS fallback if both ElevenLabs and Edge TTS fail."""
+    """gTTS fallback."""
     from gtts import gTTS
     import io
     
@@ -207,11 +184,7 @@ async def _gtts_fallback(text: str, langue: str) -> bytes:
 
 
 async def _text_to_speech(text: str, langue: str) -> bytes:
-    """
-    TTS amélioré avec priorité à Edge TTS (voix naturelles).
-    Ordre: Edge TTS (recommandé) → ElevenLabs → gTTS
-    """
-    # Nettoyer le texte
+    """TTS amélioré avec priorité à Edge TTS."""
     clean_text = _clean_text_for_tts(text, langue)
     
     if not clean_text:
@@ -219,7 +192,7 @@ async def _text_to_speech(text: str, langue: str) -> bytes:
     
     logger.info("tts_start", text_preview=clean_text[:100], langue=langue)
     
-    # Priorité 1: Edge TTS (voix naturelles, gratuites, vitesse optimisée)
+    # Priorité 1: Edge TTS
     try:
         audio = await _edge_tts(clean_text, langue)
         if audio:
@@ -228,7 +201,7 @@ async def _text_to_speech(text: str, langue: str) -> bytes:
     except Exception as e:
         logger.warning("edge_tts_failed", error=str(e))
     
-    # Priorité 2: ElevenLabs (si disponible)
+    # Priorité 2: ElevenLabs
     if ELEVENLABS_API_KEY:
         try:
             audio = await _elevenlabs_tts(clean_text, langue)
@@ -248,17 +221,10 @@ class DirectSynthesisRequest(BaseModel):
     langue: str = Field(default="fr")
 
 
-@router.post(
-    "/synthesize-direct",
-    summary="Text to Speech (direct audio)",
-    description="Convert text to speech and return base64 MP3 audio directly.",
-)
+@router.post("/synthesize-direct")
 @limiter.limit("40/minute")
 async def synthesize_direct(request: Request, body: DirectSynthesisRequest):
-    """
-    Synthesize speech and return audio_base64 in the response.
-    Uses Edge TTS for natural voices with optimized pronunciation.
-    """
+    """Synthesize speech and return audio_base64."""
     if body.langue not in settings.supported_languages_list:
         raise HTTPException(status_code=400, detail=f"Language '{body.langue}' is not supported.")
 
@@ -281,11 +247,7 @@ async def synthesize_direct(request: Request, body: DirectSynthesisRequest):
         return JSONResponse(content={"success": True, "data": {"audio_base64": ""}})
 
 
-@router.post(
-    "/synthesize",
-    summary="Text to Speech (metadata only)",
-    description="Validate synthesis request. Use /synthesize-direct for actual audio.",
-)
+@router.post("/synthesize")
 @limiter.limit("20/minute")
 async def synthesize_speech(request: Request, body: SyntheseVocaleRequete):
     """Validate a speech synthesis request."""
@@ -303,11 +265,7 @@ async def synthesize_speech(request: Request, body: SyntheseVocaleRequete):
     })
 
 
-@router.post(
-    "/recognize",
-    summary="Speech to Text",
-    description="Convert speech audio to text using Gemini AI transcription.",
-)
+@router.post("/recognize")
 @limiter.limit("20/minute")
 async def recognize_speech(
     request: Request,
@@ -354,11 +312,7 @@ Just return the exact words spoken, nothing else."""
         })
 
 
-@router.get(
-    "/languages",
-    summary="Supported Voice Languages",
-    description="Get languages supported for voice synthesis and recognition.",
-)
+@router.get("/languages")
 async def get_voice_languages():
     """Return supported voice languages."""
     languages = [
