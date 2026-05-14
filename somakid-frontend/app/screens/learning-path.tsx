@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams, Stack } from 'expo-router';
+import { router, useLocalSearchParams, Stack, usePathname } from 'expo-router';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useAuth } from '../../hooks/useAuth';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
@@ -34,8 +34,147 @@ import {
 } from '../../constants/theme';
 import Svg, { Path, Circle } from 'react-native-svg';
 
-const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 68;
+const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 83 : 64;
 const BOTTOM_SAFE_AREA = Platform.OS === 'android' ? 24 : 0;
+
+// =============================================================================
+// BottomTabBar — mirrors the (tabs) navigator appearance
+// =============================================================================
+
+function BottomTabBar({ t }: { t: (key: string) => string }) {
+  const pathname = usePathname();
+
+  const tabs = [
+    {
+      key: 'home',
+      label: t('nav.home'),
+      route: '/(tabs)/',
+      icon: (active: boolean) => (
+        <Svg width={24} height={24} viewBox="0 0 24 24" fill="none"
+          stroke={active ? Colors.primary : Colors.gray400}
+          strokeWidth={active ? 2.5 : 2}
+          strokeLinecap="round" strokeLinejoin="round">
+          <Path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          <Path d="M9 22V12h6v10" />
+        </Svg>
+      ),
+    },
+    {
+      key: 'learn',
+      label: t('nav.learn'),
+      route: '/(tabs)/learn',
+      icon: (active: boolean) => (
+        <Svg width={24} height={24} viewBox="0 0 24 24" fill="none"
+          stroke={active ? Colors.primary : Colors.gray400}
+          strokeWidth={active ? 2.5 : 2}
+          strokeLinecap="round" strokeLinejoin="round">
+          <Path d="M12 2a9 9 0 1 0 0 18 9 9 0 0 0 0-18z" />
+          <Path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4" />
+        </Svg>
+      ),
+    },
+    {
+      key: 'quiz',
+      label: t('nav.quiz'),
+      route: '/(tabs)/quiz',
+      icon: (active: boolean) => (
+        <Svg width={24} height={24} viewBox="0 0 24 24" fill="none"
+          stroke={active ? Colors.primary : Colors.gray400}
+          strokeWidth={active ? 2.5 : 2}
+          strokeLinecap="round" strokeLinejoin="round">
+          <Path d="M9 11l3 3L22 4" />
+          <Path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+        </Svg>
+      ),
+    },
+    {
+      key: 'profile',
+      label: t('nav.profile'),
+      route: '/(tabs)/profile',
+      icon: (active: boolean) => (
+        <Svg width={24} height={24} viewBox="0 0 24 24" fill="none"
+          stroke={active ? Colors.primary : Colors.gray400}
+          strokeWidth={active ? 2.5 : 2}
+          strokeLinecap="round" strokeLinejoin="round">
+          <Path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+          <Circle cx="12" cy="7" r="4" />
+        </Svg>
+      ),
+    },
+  ];
+
+  return (
+    <View style={tabStyles.container}>
+      <View style={tabStyles.bar}>
+        {tabs.map((tab) => {
+          // Highlight "learn" since we're in a learning sub-screen
+          const active =
+            tab.key === 'learn' ||
+            pathname.includes(tab.key === 'home' ? '/(tabs)/' : tab.key);
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={tabStyles.tab}
+              onPress={() => router.push(tab.route as any)}
+              activeOpacity={0.7}
+            >
+              {tab.icon(active)}
+              <Text style={[tabStyles.label, active && tabStyles.labelActive]}>
+                {tab.label}
+              </Text>
+              {active && <View style={tabStyles.indicator} />}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const tabStyles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: Colors.white,
+    borderTopWidth: 1,
+    borderTopColor: Colors.gray200,
+    paddingBottom: Platform.OS === 'ios' ? 28 : BOTTOM_SAFE_AREA,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  bar: {
+    flexDirection: 'row',
+    paddingTop: 10,
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    position: 'relative',
+  },
+  label: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.gray400,
+  },
+  labelActive: {
+    color: Colors.primary,
+  },
+  indicator: {
+    position: 'absolute',
+    top: -10,
+    width: 28,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: Colors.primary,
+  },
+});
 
 // =============================================================================
 // Types
@@ -430,6 +569,9 @@ export default function LearningPathScreen() {
           </Animated.View>
         )}
       </ScrollView>
+
+      {/* ── Bottom Tab Bar ── */}
+      <BottomTabBar t={t} />
     </SafeAreaView>
   );
 }
