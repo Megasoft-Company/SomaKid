@@ -1,9 +1,14 @@
 """
 SOMAKID AI Engine - Voice Routes
+Version finale avec prononciation corrigée et vitesse optimisée
+- "SOMAKID" prononcé correctement (So-ma-kid)
+- Vitesse augmentée (rate=1.15)
+- Utilisation prioritaire d'Edge TTS (voix naturelles)
 """
 
 import os
 import base64
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -27,6 +32,29 @@ ELEVENLABS_VOICE_MAP = {
     "sw": "TxGEqnHWrfWFTfGW9XjX",
     "en": "21m00Tcm4TlvDq8ikWAM",
 }
+
+
+def _fix_pronunciation(text: str) -> str:
+    """
+    CORRECTION CRITIQUE : Remplace les mots mal prononcés par leur version phonétique.
+    "SOMAKID" -> "So-ma-kid" (force la bonne prononciation)
+    "SOMA" -> "So-ma"
+    """
+    replacements = {
+        "SOMAKID": "So-ma-kid",
+        "Somakid": "So-ma-kid",
+        "somakid": "So-ma-kid",
+        "SOMA": "So-ma",
+        "Soma": "So-ma",
+        "soma": "So-ma",
+        "SOMAKID AI": "So-ma-kid A-I",
+        "AI Engine": "A-I Engine",
+    }
+    
+    result = text
+    for word, replacement in replacements.items():
+        result = re.sub(rf'\b{word}\b', replacement, result, flags=re.IGNORECASE)
+    return result
 
 
 def _normalize_phonetic(text: str, langue: str) -> str:
@@ -75,6 +103,26 @@ def _add_natural_pauses(text: str) -> str:
     return text
 
 
+def _clean_text_for_tts(text: str, langue: str) -> str:
+    """
+    Nettoyage complet du texte pour TTS:
+    1. Correction phonétique des mots problématiques
+    2. Normalisation des caractères spéciaux
+    3. Suppression des caractères indésirables
+    """
+    # Correction de la prononciation
+    text = _fix_pronunciation(text)
+    
+    # Normalisation phonétique pour les langues africaines
+    text = _normalize_phonetic(text, langue)
+    
+    # Suppression des caractères problématiques
+    text = re.sub(r'[#*_~|`]', '', text)
+    text = re.sub(r'\s+', ' ', text)
+    
+    return text.strip()
+
+
 async def _elevenlabs_tts(text: str, langue: str) -> bytes:
     """Text-to-speech with ElevenLabs for perfect African language pronunciation."""
     if not ELEVENLABS_API_KEY:
@@ -86,6 +134,10 @@ async def _elevenlabs_tts(text: str, langue: str) -> bytes:
         text=text,
         voice=voice_id,
         model="eleven_multilingual_v2",
+        voice_settings={
+            "stability": 0.35,
+            "similarity_boost": 0.75,
+        },
     )
     audio_bytes = b""
     for chunk in audio_generator:
@@ -94,29 +146,39 @@ async def _elevenlabs_tts(text: str, langue: str) -> bytes:
 
 
 async def _edge_tts(text: str, langue: str) -> bytes:
-    """Synthesize speech using Microsoft Edge TTS with SSML for natural pauses."""
+    """
+    Synthesize speech using Microsoft Edge TTS with optimized SSML.
+    Vitesse augmentée à 1.15 (15% plus rapide) pour une écoute naturelle.
+    """
     import edge_tts
+    
     voice_map = {
         "fr": "fr-FR-DeniseNeural",
         "ln": "fr-FR-DeniseNeural",
         "sw": "sw-KE-RehemaNeural",
-        "en": "en-US-AriaNeural",
+        "en": "en-US-JennyNeural",
     }
     voice = voice_map.get(langue, "fr-FR-DeniseNeural")
 
-    ssml_text = (
-        text.replace(". ", '.<break time="450ms"/> ')
-        .replace("? ", '?<break time="550ms"/> ')
-        .replace("! ", '!<break time="550ms"/> ')
-        .replace(": ", ':<break time="350ms"/> ')
-        .replace(", ", ',<break time="250ms"/> ')
-    )
+    # Nettoyer le texte
+    clean_text = _clean_text_for_tts(text, langue)
+    
+    # Ajouter des pauses naturelles
+    ssml_text = clean_text
+    ssml_text = ssml_text.replace(". ", '.<break time="400ms"/> ')
+    ssml_text = ssml_text.replace("? ", '?<break time="500ms"/> ')
+    ssml_text = ssml_text.replace("! ", '!<break time="500ms"/> ')
+    ssml_text = ssml_text.replace(": ", ':<break time="300ms"/> ')
+    ssml_text = ssml_text.replace(", ", ',<break time="150ms"/> ')
 
-    ssml = f"""<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="{langue}">
+    # SSML avec vitesse augmentée (1.15 = 15% plus rapide)
+    ssml = f"""<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="http://www.w3.org/2001/mstts" xml:lang="{langue}">
         <voice name="{voice}">
-            <prosody rate="0.85" pitch="+0Hz">
-                {ssml_text}
-            </prosody>
+            <mstts:express-as style="cheerful" styledegree="1.2">
+                <prosody rate="1.15" pitch="+0Hz">
+                    {ssml_text}
+                </prosody>
+            </mstts:express-as>
         </voice>
     </speak>"""
 
@@ -132,29 +194,53 @@ async def _gtts_fallback(text: str, langue: str) -> bytes:
     """gTTS fallback if both ElevenLabs and Edge TTS fail."""
     from gtts import gTTS
     import io
+    
     lang_map = {"fr": "fr", "ln": "fr", "sw": "sw", "en": "en"}
-    clean_text = _add_natural_pauses(text)
+    clean_text = _clean_text_for_tts(text, langue)
+    clean_text = _add_natural_pauses(clean_text)
+    
     buf = io.BytesIO()
-    tts = gTTS(text=clean_text, lang=lang_map.get(langue, "fr"), slow=True)
+    tts = gTTS(text=clean_text, lang=lang_map.get(langue, "fr"), slow=False)
     tts.write_to_fp(buf)
     buf.seek(0)
     return buf.read()
 
 
 async def _text_to_speech(text: str, langue: str) -> bytes:
-    """TTS with ElevenLabs primary, Edge TTS secondary, gTTS fallback."""
-    normalized_text = _normalize_phonetic(text, langue)
-
+    """
+    TTS amélioré avec priorité à Edge TTS (voix naturelles).
+    Ordre: Edge TTS (recommandé) → ElevenLabs → gTTS
+    """
+    # Nettoyer le texte
+    clean_text = _clean_text_for_tts(text, langue)
+    
+    if not clean_text:
+        clean_text = "Je suis désolé, je n'ai pas pu générer de réponse vocale."
+    
+    logger.info("tts_start", text_preview=clean_text[:100], langue=langue)
+    
+    # Priorité 1: Edge TTS (voix naturelles, gratuites, vitesse optimisée)
+    try:
+        audio = await _edge_tts(clean_text, langue)
+        if audio:
+            logger.info("edge_tts_success", audio_size=len(audio), langue=langue)
+            return audio
+    except Exception as e:
+        logger.warning("edge_tts_failed", error=str(e))
+    
+    # Priorité 2: ElevenLabs (si disponible)
     if ELEVENLABS_API_KEY:
         try:
-            return await _elevenlabs_tts(normalized_text, langue)
+            audio = await _elevenlabs_tts(clean_text, langue)
+            if audio:
+                logger.info("elevenlabs_success", audio_size=len(audio), langue=langue)
+                return audio
         except Exception as e:
-            logger.warning("elevenlabs_tts_failed_falling_back_to_edge", error=str(e))
-    try:
-        return await _edge_tts(normalized_text, langue)
-    except Exception as e:
-        logger.warning("edge_tts_failed_falling_back_to_gtts", error=str(e))
-        return await _gtts_fallback(normalized_text, langue)
+            logger.warning("elevenlabs_failed", error=str(e))
+    
+    # Fallback: gTTS
+    logger.warning("using_gtts_fallback", langue=langue)
+    return await _gtts_fallback(clean_text, langue)
 
 
 class DirectSynthesisRequest(BaseModel):
@@ -171,7 +257,7 @@ class DirectSynthesisRequest(BaseModel):
 async def synthesize_direct(request: Request, body: DirectSynthesisRequest):
     """
     Synthesize speech and return audio_base64 in the response.
-    Uses ElevenLabs for African languages when API key is configured.
+    Uses Edge TTS for natural voices with optimized pronunciation.
     """
     if body.langue not in settings.supported_languages_list:
         raise HTTPException(status_code=400, detail=f"Language '{body.langue}' is not supported.")
@@ -179,6 +265,9 @@ async def synthesize_direct(request: Request, body: DirectSynthesisRequest):
     try:
         audio_mp3 = await _text_to_speech(body.texte, body.langue)
         audio_b64 = base64.b64encode(audio_mp3).decode("utf-8")
+        
+        logger.info("tts_success", text_length=len(body.texte), audio_length=len(audio_b64), langue=body.langue)
+        
         return JSONResponse(content={
             "success": True,
             "data": {
