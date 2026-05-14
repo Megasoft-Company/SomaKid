@@ -28,15 +28,166 @@ import { getCurrentLanguage } from '../../i18n';
 import { Colors, Spacing, BorderRadius, Shadows } from '../../constants/theme';
 import Svg, { Path, Circle } from 'react-native-svg';
 
-const TAB_BAR_HEIGHT    = Platform.OS === 'ios' ? 88 : 68;
-const BOTTOM_SAFE_AREA  = Platform.OS === 'android' ? 24 : 0;
+// =============================================================================
+// CONSTANTS
+// =============================================================================
+
+const TAB_BAR_HEIGHT   = Platform.OS === 'ios' ? 88 : 68;
+const BOTTOM_SAFE_AREA = Platform.OS === 'android' ? 24 : 0;
 
 // Total lessons per unit — must match the backend constant
 const TOTAL_LESSONS_PER_UNIT = 4;
 
-// ---------------------------------------------------------------------------
+// =============================================================================
+// BottomTabBar — exact replica of app/(tabs)/_layout.tsx
+// 6 tabs: Home · Learn · Explorer · Quiz · Chat · Profil
+// "Learn" is always focused since this screen is a sub-screen of Learn.
+// =============================================================================
+
+function HomeIcon({ color, focused }: { color: string; focused: boolean }) {
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={focused ? 2.5 : 2} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <Path d="M9 22V12h6v10" />
+    </Svg>
+  );
+}
+function LearnIcon({ color, focused }: { color: string; focused: boolean }) {
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={focused ? 2.5 : 2} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M12 2a9 9 0 1 0 0 18 9 9 0 0 0 0-18z" />
+      <Path d="M12 2v4" /><Path d="M12 18v4" />
+      <Path d="M4.93 4.93l2.83 2.83" /><Path d="M16.24 16.24l2.83 2.83" />
+      <Path d="M2 12h4" /><Path d="M18 12h4" />
+      <Path d="M4.93 19.07l2.83-2.83" /><Path d="M16.24 7.76l2.83-2.83" />
+    </Svg>
+  );
+}
+function ExploreIcon({ color, focused }: { color: string; focused: boolean }) {
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={focused ? 2.5 : 2} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7z" />
+      <Path d="M12 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" />
+    </Svg>
+  );
+}
+function QuizIcon({ color, focused }: { color: string; focused: boolean }) {
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={focused ? 2.5 : 2} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+    </Svg>
+  );
+}
+function ChatIcon({ color, focused }: { color: string; focused: boolean }) {
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={focused ? 2.5 : 2} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+    </Svg>
+  );
+}
+function ProfileIcon({ color, focused }: { color: string; focused: boolean }) {
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={focused ? 2.5 : 2} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <Path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
+    </Svg>
+  );
+}
+
+function TabIcon({
+  Icon, label, focused, color,
+}: {
+  Icon: React.FC<{ color: string; focused: boolean }>;
+  label: string; focused: boolean; color: string;
+}) {
+  return (
+    <View style={[tabStyles.tabItem, focused && { backgroundColor: color + '15' }]}>
+      <Icon color={focused ? color : Colors.gray400} focused={focused} />
+      {focused && (
+        <Text style={[tabStyles.tabLabel, { color }]} numberOfLines={1} ellipsizeMode="tail">
+          {label}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+function BottomTabBar() {
+  const TABS = [
+    { key: 'index',    label: 'Home',    color: Colors.primary,                      Icon: HomeIcon,    route: '/(tabs)/' },
+    { key: 'learn',    label: 'Learn',   color: '#8B5CF6',                           Icon: LearnIcon,   route: '/(tabs)/learn' },
+    { key: 'explorer', label: 'Explore', color: Colors.modules?.explorer ?? '#4CAF50', Icon: ExploreIcon, route: '/(tabs)/explorer' },
+    { key: 'quiz',     label: 'Quiz',    color: Colors.modules?.quiz    ?? Colors.accent, Icon: QuizIcon,  route: '/(tabs)/quiz' },
+    { key: 'chat',     label: 'SOMA',    color: Colors.modules?.chat    ?? Colors.primary, Icon: ChatIcon, route: '/(tabs)/chat' },
+    { key: 'profil',   label: 'Profile', color: Colors.accent,                       Icon: ProfileIcon, route: '/(tabs)/profil' },
+  ];
+
+  return (
+    <View style={tabStyles.tabBar}>
+      {TABS.map((tab) => (
+        <TouchableOpacity
+          key={tab.key}
+          style={tabStyles.tabTouchable}
+          onPress={() => router.push(tab.route as any)}
+          activeOpacity={0.8}
+        >
+          {/* "learn" tab always focused — we're in a Learn sub-screen */}
+          <TabIcon Icon={tab.Icon} label={tab.label} focused={tab.key === 'learn'} color={tab.color} />
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
+const tabStyles = StyleSheet.create({
+  tabBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    backgroundColor: Colors.white,
+    borderTopWidth: 0,
+    height:        Platform.OS === 'ios' ? 88 : 68,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 10,
+    paddingTop: 8,
+    paddingHorizontal: 12,
+    marginBottom:   Platform.OS === 'android' ? 10 : 0,
+    marginHorizontal: Platform.OS === 'android' ? 10 : 0,
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 20,
+  },
+  tabTouchable: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.lg,
+    minWidth: 52,
+    maxWidth: 72,
+  },
+  tabLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 3,
+    letterSpacing: 0.3,
+    textAlign: 'center',
+  },
+});
+
+// =============================================================================
 // Types
-// ---------------------------------------------------------------------------
+// =============================================================================
+
 interface LessonData {
   id: string;
   path_id: string;
@@ -59,12 +210,8 @@ interface LessonData {
 interface ExerciseData {
   id: string;
   exercise_type:
-    | 'multiple_choice'
-    | 'true_false'
-    | 'fill_blank'
-    | 'open_question'
-    | 'matching'
-    | 'image_identification';
+    | 'multiple_choice' | 'true_false' | 'fill_blank'
+    | 'open_question'   | 'matching'   | 'image_identification';
   question: string;
   options: string[];
   correct_answer?: any;
@@ -81,15 +228,12 @@ interface ExerciseResult {
   correct_answer_index?: number;
 }
 
-// ---------------------------------------------------------------------------
-// ExerciseCard
-// ---------------------------------------------------------------------------
+// =============================================================================
+// ExerciseCard Component
+// =============================================================================
+
 function ExerciseCard({
-  exercise,
-  onAnswer,
-  isAnswered,
-  result,
-  t,
+  exercise, onAnswer, isAnswered, result, t,
 }: {
   exercise: ExerciseData;
   onAnswer: (answer: any) => void;
@@ -101,11 +245,7 @@ function ExerciseCard({
   const [textAnswer, setTextAnswer]         = useState('');
   const animScale = useRef(new Animated.Value(1)).current;
 
-  // Reset local UI state when the exercise changes (next exercise shown)
-  useEffect(() => {
-    setSelectedOption(null);
-    setTextAnswer('');
-  }, [exercise.id]);
+  useEffect(() => { setSelectedOption(null); setTextAnswer(''); }, [exercise.id]);
 
   const handleOptionPress = (index: number) => {
     if (isAnswered) return;
@@ -117,9 +257,7 @@ function ExerciseCard({
     onAnswer(index);
   };
 
-  const handleTextSubmit = () => {
-    if (textAnswer.trim()) onAnswer(textAnswer.trim());
-  };
+  const handleTextSubmit = () => { if (textAnswer.trim()) onAnswer(textAnswer.trim()); };
 
   return (
     <Animated.View style={localStyles.exerciseCardAnimated}>
@@ -127,12 +265,9 @@ function ExerciseCard({
       <View style={localStyles.exerciseHeader}>
         <View style={[localStyles.exerciseTypeBadge, { backgroundColor: Colors.primary + '15' }]}>
           <Text style={[localStyles.exerciseTypeText, { color: Colors.primary }]}>
-            {exercise.exercise_type === 'multiple_choice'
-              ? 'QCM'
-              : exercise.exercise_type === 'true_false'
-              ? t('learn.trueFalse')
-              : exercise.exercise_type === 'fill_blank'
-              ? t('learn.fillBlank')
+            {exercise.exercise_type === 'multiple_choice' ? 'QCM'
+              : exercise.exercise_type === 'true_false'   ? t('learn.trueFalse')
+              : exercise.exercise_type === 'fill_blank'   ? t('learn.fillBlank')
               : t('learn.openQuestion')}
           </Text>
         </View>
@@ -142,9 +277,8 @@ function ExerciseCard({
       {/* Question */}
       <Text style={localStyles.exerciseQuestion}>{exercise.question}</Text>
 
-      {/* Multiple-choice / True-False options */}
-      {(exercise.exercise_type === 'multiple_choice' ||
-        exercise.exercise_type === 'true_false') && (
+      {/* Multiple-choice / True-False */}
+      {(exercise.exercise_type === 'multiple_choice' || exercise.exercise_type === 'true_false') && (
         <View style={localStyles.optionsContainer}>
           {(exercise.exercise_type === 'true_false'
             ? [t('learn.true'), t('learn.false')]
@@ -154,58 +288,34 @@ function ExerciseCard({
             const isCorrectOption = result ? index === result.correct_answer_index : false;
             const isWrongSelected = result ? isSelected && !result.is_correct : false;
 
-            let bgColor: string           = Colors.gray100;
-            let borderColor: string       = Colors.gray200;
-            let textColor: string         = Colors.gray700;
-            let textWeight: '500' | '700' = '500';
+            let bgColor: string = Colors.gray100, borderColor: string = Colors.gray200;
+            let textColor: string = Colors.gray700, textWeight: '500' | '700' = '500';
 
-            if (result && isCorrectOption) {
-              bgColor = Colors.primary; borderColor = Colors.primary;
-              textColor = Colors.white; textWeight = '700';
-            } else if (isWrongSelected) {
-              bgColor = Colors.danger + '15'; borderColor = Colors.danger;
-              textColor = Colors.danger; textWeight = '700';
-            } else if (isSelected && !result) {
-              bgColor = Colors.primary + '15'; borderColor = Colors.primary;
-              textColor = Colors.primary; textWeight = '700';
-            }
+            if (result && isCorrectOption)      { bgColor = Colors.primary; borderColor = Colors.primary; textColor = Colors.white; textWeight = '700'; }
+            else if (isWrongSelected)           { bgColor = Colors.danger + '15'; borderColor = Colors.danger; textColor = Colors.danger; textWeight = '700'; }
+            else if (isSelected && !result)     { bgColor = Colors.primary + '15'; borderColor = Colors.primary; textColor = Colors.primary; textWeight = '700'; }
 
             return (
               <TouchableOpacity
                 key={index}
-                style={{
-                  flexDirection: 'row' as const,
-                  alignItems: 'center' as const,
-                  gap: Spacing.md,
-                  padding: Spacing.md,
-                  borderRadius: BorderRadius.lg,
-                  borderWidth: 2,
-                  borderColor,
-                  backgroundColor: bgColor,
-                }}
+                style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: Spacing.md, padding: Spacing.md, borderRadius: BorderRadius.lg, borderWidth: 2, borderColor, backgroundColor: bgColor }}
                 onPress={() => handleOptionPress(index)}
                 disabled={isAnswered}
                 activeOpacity={0.8}
               >
                 {exercise.exercise_type === 'multiple_choice' && (
                   <View style={localStyles.optionLetter}>
-                    <Text style={localStyles.optionLetterText}>
-                      {String.fromCharCode(65 + index)}
-                    </Text>
+                    <Text style={localStyles.optionLetterText}>{String.fromCharCode(65 + index)}</Text>
                   </View>
                 )}
-                <Text style={[localStyles.optionText, { color: textColor, fontWeight: textWeight }]}>
-                  {option}
-                </Text>
+                <Text style={[localStyles.optionText, { color: textColor, fontWeight: textWeight }]}>{option}</Text>
                 {result && isCorrectOption && (
-                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none"
-                    stroke={Colors.white} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={Colors.white} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
                     <Path d="M20 6L9 17l-5-5" />
                   </Svg>
                 )}
                 {isWrongSelected && (
-                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none"
-                    stroke={Colors.danger} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+                  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={Colors.danger} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
                     <Path d="M18 6L6 18M6 6l12 12" />
                   </Svg>
                 )}
@@ -216,16 +326,11 @@ function ExerciseCard({
       )}
 
       {/* Fill blank / Open question */}
-      {(exercise.exercise_type === 'fill_blank' ||
-        exercise.exercise_type === 'open_question') && (
+      {(exercise.exercise_type === 'fill_blank' || exercise.exercise_type === 'open_question') && (
         <View style={localStyles.fillBlankContainer}>
           <TextInput
             style={isAnswered ? localStyles.inputDisabled : localStyles.fillBlankInput}
-            placeholder={
-              exercise.exercise_type === 'fill_blank'
-                ? t('learn.typeAnswer')
-                : t('learn.writeAnswer')
-            }
+            placeholder={exercise.exercise_type === 'fill_blank' ? t('learn.typeAnswer') : t('learn.writeAnswer')}
             placeholderTextColor={Colors.gray400}
             value={textAnswer}
             onChangeText={setTextAnswer}
@@ -249,14 +354,9 @@ function ExerciseCard({
         </View>
       )}
 
-      {/* Feedback card (shown after answering) */}
+      {/* Feedback card */}
       {result && (
-        <View
-          style={[
-            localStyles.feedbackCard,
-            { backgroundColor: result.is_correct ? Colors.primary + '10' : Colors.accent + '10' },
-          ]}
-        >
+        <View style={[localStyles.feedbackCard, { backgroundColor: result.is_correct ? Colors.primary + '10' : Colors.accent + '10' }]}>
           <View style={localStyles.feedbackHeader}>
             <Svg width={20} height={20} viewBox="0 0 24 24" fill="none"
               stroke={result.is_correct ? Colors.primary : Colors.accent}
@@ -265,27 +365,19 @@ function ExerciseCard({
                 ? <Path d="M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3" />
                 : <Path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 8v4M12 16h.01" />}
             </Svg>
-            <Text style={[
-              localStyles.feedbackTitle,
-              { color: result.is_correct ? Colors.primary : Colors.accent },
-            ]}>
+            <Text style={[localStyles.feedbackTitle, { color: result.is_correct ? Colors.primary : Colors.accent }]}>
               {result.is_correct ? t('learn.correct') : t('learn.incorrect')}
             </Text>
           </View>
-
-          {/* Show correct answer only on wrong attempt */}
           {!result.is_correct && result.correct_answer && (
             <View style={localStyles.correctAnswerRow}>
               <Text style={localStyles.correctAnswerLabel}>{t('learn.correctAnswer')}: </Text>
               <Text style={localStyles.correctAnswerText}>{result.correct_answer}</Text>
             </View>
           )}
-
           <Text style={localStyles.feedbackExplanation}>{result.explanation}</Text>
           {result.is_correct && (
-            <Text style={localStyles.feedbackPoints}>
-              +{result.points_earned} {t('common.points')}
-            </Text>
+            <Text style={localStyles.feedbackPoints}>+{result.points_earned} {t('common.points')}</Text>
           )}
         </View>
       )}
@@ -293,9 +385,10 @@ function ExerciseCard({
   );
 }
 
-// ---------------------------------------------------------------------------
+// =============================================================================
 // LessonScreen (main export)
-// ---------------------------------------------------------------------------
+// =============================================================================
+
 export default function LessonScreen() {
   const { t } = useTranslation();
   const { activeChild } = useAuth();
@@ -305,15 +398,9 @@ export default function LessonScreen() {
   const unitNumber   = parseInt(params.unitNumber   || '1');
   const lessonNumber = parseInt(params.lessonNumber || '1');
 
-  // ---------------------------------------------------------------------------
-  // screenKey: stable string derived from current lesson coords.
-  // Stored in state so we can detect changes when router.replace() updates
-  // params without unmounting the component.
-  // ---------------------------------------------------------------------------
   const buildKey = (p: string, u: number, l: number) => `${p}-${u}-${l}`;
   const [screenKey, setScreenKey] = useState(() => buildKey(pathId, unitNumber, lessonNumber));
 
-  // Core lesson state
   const [lesson, setLesson]                             = useState<LessonData | null>(null);
   const [isLoading, setIsLoading]                       = useState(true);
   const [error, setError]                               = useState<string | null>(null);
@@ -325,232 +412,123 @@ export default function LessonScreen() {
 
   const fadeIn = useRef(new Animated.Value(0)).current;
 
-  // ---------------------------------------------------------------------------
-  // resetAllState — wipes every piece of lesson/exercise state to guarantee
-  // the user always starts a new lesson completely fresh.
-  // ---------------------------------------------------------------------------
   const resetAllState = () => {
-    setLesson(null);
-    setExerciseResults(new Map());
-    setCurrentExerciseIndex(0);
-    setShowContent(true);
-    setLessonCompleted(false);
-    setAllLessonsInUnitDone(false);
-    setError(null);
-    fadeIn.setValue(0);
+    setLesson(null); setExerciseResults(new Map()); setCurrentExerciseIndex(0);
+    setShowContent(true); setLessonCompleted(false); setAllLessonsInUnitDone(false);
+    setError(null); fadeIn.setValue(0);
   };
 
-  // ---------------------------------------------------------------------------
-  // fetchLesson — calls the AI engine to generate fresh lesson content.
-  // Parameters are passed explicitly (not from closure) so this function can
-  // be called with the correct values even during the key-change transition.
-  // ---------------------------------------------------------------------------
   const fetchLesson = async (p: string, u: number, l: number) => {
     setIsLoading(true);
     try {
       const lang = getCurrentLanguage();
-      const res  = await aiEngineClient.post('/learning/lessons/generate', {
-        path_id:       p,
-        unit_number:   u,
-        lesson_number: l,
-        langue:        lang,
-        child_age:     activeChild?.age   || 8,
-        child_level:   activeChild?.level || 1,
+      const res = await aiEngineClient.post('/learning/lessons/generate', {
+        path_id: p, unit_number: u, lesson_number: l, langue: lang,
+        child_age: activeChild?.age || 8, child_level: activeChild?.level || 1,
       });
       setLesson(res.data?.data ?? null);
       Animated.timing(fadeIn, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-    } catch {
-      setError(t('learn.errorLoadingLesson'));
-    } finally {
-      setIsLoading(false);
-    }
+    } catch { setError(t('learn.errorLoadingLesson')); }
+    finally  { setIsLoading(false); }
   };
 
-  // ---------------------------------------------------------------------------
-  // Detect param changes caused by router.replace() within the same component
-  // instance. When the key changes: reset state, update the stored key, then
-  // load the new lesson.
-  // ---------------------------------------------------------------------------
   const incomingKey = buildKey(pathId, unitNumber, lessonNumber);
   useEffect(() => {
-    if (incomingKey !== screenKey) {
-      resetAllState();
-      setScreenKey(incomingKey);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (incomingKey !== screenKey) { resetAllState(); setScreenKey(incomingKey); }
   }, [incomingKey]);
 
-  // ---------------------------------------------------------------------------
-  // Load lesson whenever screenKey changes (covers initial mount + lesson change).
-  // Using screenKey as the dep means this fires exactly once per lesson.
-  // ---------------------------------------------------------------------------
   useEffect(() => {
-    // Re-derive coords from screenKey to avoid stale closure values
     const [p, u, l] = screenKey.split('-');
     resetAllState();
     fetchLesson(p, parseInt(u), parseInt(l));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screenKey]);
 
-  // ---------------------------------------------------------------------------
-  // handleExerciseAnswer — submits a single answer and stores the result
-  // ---------------------------------------------------------------------------
-  const handleExerciseAnswer = useCallback(
-    async (answer: any) => {
-      if (!lesson) return;
-      const exercise = lesson.exercises[currentExerciseIndex];
-      if (!exercise) return;
-
-      try {
-        const res = await aiEngineClient.post('/learning/exercises/submit', {
-          exercise_id:    exercise.id,
-          lesson_id:      lesson.id,
-          answer:         String(answer),
-          exercise_type:  exercise.exercise_type,
-          correct_answer: exercise.correct_answer,
-          options:        exercise.options,
-          explanation:    exercise.explanation,
-          points:         exercise.points,
-          child_id:       activeChild?.id,
-          session_id:     `lesson_${lesson.id}`,
-        });
-        const result: ExerciseResult = res.data?.data;
-        setExerciseResults((prev) => {
-          const m = new Map(prev);
-          m.set(exercise.id, result);
-          return m;
-        });
-      } catch {
-        setExerciseResults((prev) => {
-          const m = new Map(prev);
-          m.set(exercise.id, { is_correct: false, explanation: t('learn.errorSubmitting'), points_earned: 0 });
-          return m;
-        });
-      }
-    },
-    [lesson, currentExerciseIndex, activeChild, t],
-  );
-
-  // ---------------------------------------------------------------------------
-  // handleNextExercise
-  // ---------------------------------------------------------------------------
-  const handleNextExercise = useCallback(() => {
+  const handleExerciseAnswer = useCallback(async (answer: any) => {
     if (!lesson) return;
-    if (currentExerciseIndex < lesson.exercises.length - 1) {
-      setCurrentExerciseIndex((prev) => prev + 1);
-    } else {
-      handleCompleteLesson();
+    const exercise = lesson.exercises[currentExerciseIndex];
+    if (!exercise) return;
+    try {
+      const res = await aiEngineClient.post('/learning/exercises/submit', {
+        exercise_id: exercise.id, lesson_id: lesson.id, answer: String(answer),
+        exercise_type: exercise.exercise_type, correct_answer: exercise.correct_answer,
+        options: exercise.options, explanation: exercise.explanation, points: exercise.points,
+        child_id: activeChild?.id, session_id: `lesson_${lesson.id}`,
+      });
+      const result: ExerciseResult = res.data?.data;
+      setExerciseResults((prev) => { const m = new Map(prev); m.set(exercise.id, result); return m; });
+    } catch {
+      setExerciseResults((prev) => { const m = new Map(prev); m.set(exercise.id, { is_correct: false, explanation: t('learn.errorSubmitting'), points_earned: 0 }); return m; });
     }
-  }, [lesson, currentExerciseIndex]);
+  }, [lesson, currentExerciseIndex, activeChild, t]);
 
-  // ---------------------------------------------------------------------------
-  // handleCompleteLesson — saves progress to backend and shows completion card.
-  //
-  // CRITICAL: lesson_id key format must match exactly what the backend method
-  // _get_lessons_with_progress() generates:  "lesson_{pathId}_{unit}_{lesson}"
-  // Sending the AI UUID would never match → progress never saved → lessons stay locked.
-  // ---------------------------------------------------------------------------
   const handleCompleteLesson = useCallback(async () => {
     if (!lesson || lessonCompleted) return;
     setLessonCompleted(true);
-
     const correctCount = Array.from(exerciseResults.values()).filter((r) => r.is_correct).length;
-    const score =
-      lesson.exercises.length > 0
-        ? Math.round((correctCount / lesson.exercises.length) * 100)
-        : 100;
-
-    const lessonKey = `lesson_${pathId}_${unitNumber}_${lessonNumber}`;
-
+    const score = lesson.exercises.length > 0 ? Math.round((correctCount / lesson.exercises.length) * 100) : 100;
     try {
       const res = await aiEngineClient.post('/learning/lessons/complete', {
-        lesson_id:          lessonKey,
-        unit_id:            String(unitNumber),
-        path_id:            pathId,
-        child_id:           activeChild?.id || 'anonymous',
-        score,
-        time_spent_seconds: 0,
+        lesson_id: `lesson_${pathId}_${unitNumber}_${lessonNumber}`,
+        unit_id: String(unitNumber), path_id: pathId,
+        child_id: activeChild?.id || 'anonymous', score, time_spent_seconds: 0,
       });
       setAllLessonsInUnitDone(res.data?.data?.all_lessons_completed === true);
-    } catch {
-      setAllLessonsInUnitDone(false);
-    }
+    } catch { setAllLessonsInUnitDone(false); }
   }, [lesson, exerciseResults, lessonCompleted, pathId, unitNumber, lessonNumber, activeChild]);
 
-  // ---------------------------------------------------------------------------
-  // handleGoToNextLesson — navigates to the next lesson.
-  // router.replace keeps the back-button pointing to the unit screen.
-  // The screenKey detection above ensures a full state reset follows.
-  // ---------------------------------------------------------------------------
+  const handleNextExercise = useCallback(() => {
+    if (!lesson) return;
+    currentExerciseIndex < lesson.exercises.length - 1
+      ? setCurrentExerciseIndex((p) => p + 1)
+      : handleCompleteLesson();
+  }, [lesson, currentExerciseIndex]);
+
   const handleGoToNextLesson = useCallback(() => {
-    router.replace({
-      pathname: '/screens/lesson',
-      params: {
-        pathId,
-        unitNumber:   String(unitNumber),
-        lessonNumber: String(lessonNumber + 1),
-      },
-    } as any);
+    router.replace({ pathname: '/screens/lesson', params: { pathId, unitNumber: String(unitNumber), lessonNumber: String(lessonNumber + 1) } } as any);
   }, [pathId, unitNumber, lessonNumber]);
 
-  const handleStartExercises = useCallback(() => {
-    setShowContent(false);
-    setCurrentExerciseIndex(0);
-  }, []);
+  const handleStartExercises = useCallback(() => { setShowContent(false); setCurrentExerciseIndex(0); }, []);
+  const handleBackToContent  = useCallback(() => setShowContent(true), []);
 
-  const handleBackToContent = useCallback(() => setShowContent(true), []);
-
-  // ---------------------------------------------------------------------------
-  // Derived state
-  // ---------------------------------------------------------------------------
   const currentExercise   = lesson?.exercises[currentExerciseIndex];
   const currentResult     = currentExercise ? exerciseResults.get(currentExercise.id) : null;
   const isCurrentAnswered = currentResult !== undefined;
   const totalCorrect      = Array.from(exerciseResults.values()).filter((r) => r.is_correct).length;
   const isLastLesson      = lessonNumber >= TOTAL_LESSONS_PER_UNIT;
 
-  // ---------------------------------------------------------------------------
-  // Render guards
-  // ---------------------------------------------------------------------------
-  if (isLoading)
-    return (
-      <SafeAreaView style={localStyles.container} edges={['top']}>
-        <Stack.Screen options={{ headerShown: true, headerTitle: t('learn.lesson'), headerBackTitle: t('common.back') }} />
-        <View style={localStyles.loadingContainer}>
-          <LoadingSpinner message={t('learn.loading')} color={Colors.primary} />
-        </View>
-      </SafeAreaView>
-    );
+  // =============================================================================
+  // Render
+  // =============================================================================
+  return (
+    <SafeAreaView style={localStyles.container} edges={['top']}>
+      <Stack.Screen
+        options={{
+          title: lesson?.title || t('learn.lesson'),
+          headerBackTitle: t('common.back'),
+          headerBackVisible: true,
+          headerStyle: { backgroundColor: Colors.white },
+          headerTitleStyle: { fontWeight: '600', color: Colors.black },
+          headerShadowVisible: false,
+        }}
+      />
 
-  if (error)
-    return (
-      <SafeAreaView style={localStyles.container} edges={['top']}>
-        <Stack.Screen options={{ headerShown: true, headerTitle: t('learn.lesson'), headerBackTitle: t('common.back') }} />
-        <ErrorDisplay message={error} onRetry={() => fetchLesson(pathId, unitNumber, lessonNumber)} />
-      </SafeAreaView>
-    );
-
-  if (!lesson)
-    return (
-      <SafeAreaView style={localStyles.container} edges={['top']}>
-        <Stack.Screen options={{ headerShown: true, headerTitle: t('learn.lesson'), headerBackTitle: t('common.back') }} />
-        <ErrorDisplay message={t('learn.lessonNotFound')} onRetry={() => fetchLesson(pathId, unitNumber, lessonNumber)} />
-      </SafeAreaView>
-    );
-
-  // ---------------------------------------------------------------------------
-  // Render — lesson content view
-  // ---------------------------------------------------------------------------
-  if (showContent)
-    return (
-      <SafeAreaView style={localStyles.container} edges={['top']}>
-        <Stack.Screen options={{ headerShown: true, headerTitle: lesson.title, headerBackTitle: t('common.back') }} />
-        <ScrollView
-          contentContainerStyle={[localStyles.scrollContent, { paddingBottom: TAB_BAR_HEIGHT + BOTTOM_SAFE_AREA + 20 }]}
-          showsVerticalScrollIndicator={false}
-        >
+      <ScrollView
+        contentContainerStyle={[localStyles.scrollContent, { paddingBottom: TAB_BAR_HEIGHT + BOTTOM_SAFE_AREA + 20 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {isLoading ? (
+          <View style={localStyles.loadingContainer}>
+            <LoadingSpinner message={t('learn.loading')} color={Colors.primary} />
+          </View>
+        ) : error ? (
+          <ErrorDisplay message={error} onRetry={() => fetchLesson(pathId, unitNumber, lessonNumber)} />
+        ) : !lesson ? (
+          <ErrorDisplay message={t('learn.lessonNotFound')} onRetry={() => fetchLesson(pathId, unitNumber, lessonNumber)} />
+        ) : showContent ? (
+          // ──────────────────────────────────────────────────────────────────
+          // CONTENT VIEW
+          // ──────────────────────────────────────────────────────────────────
           <Animated.View style={{ opacity: fadeIn }}>
-            {/* Hero banner */}
             <LinearGradient colors={[Colors.gradients.heroStart, Colors.gradients.heroMiddle]} style={localStyles.lessonHeader}>
               <Text style={localStyles.lessonEmoji}>{lesson.emoji}</Text>
               <Text style={localStyles.lessonTitle}>{lesson.title}</Text>
@@ -573,12 +551,10 @@ export default function LessonScreen() {
               </View>
             </LinearGradient>
 
-            {/* Main content */}
             <View style={localStyles.contentSection}>
               <Text style={localStyles.contentText}>{lesson.content}</Text>
             </View>
 
-            {/* Vocabulary */}
             {lesson.vocabulary?.length > 0 && (
               <View style={localStyles.section}>
                 <Text style={localStyles.sectionTitle}>{t('learn.vocabulary')}</Text>
@@ -591,7 +567,6 @@ export default function LessonScreen() {
               </View>
             )}
 
-            {/* Key points */}
             {lesson.key_points?.length > 0 && (
               <View style={localStyles.section}>
                 <Text style={localStyles.sectionTitle}>{t('learn.keyPoints')}</Text>
@@ -606,7 +581,6 @@ export default function LessonScreen() {
               </View>
             )}
 
-            {/* Fun fact */}
             {!!lesson.fun_fact && (
               <View style={localStyles.funFactCard}>
                 <Text style={localStyles.funFactEmoji}>💡</Text>
@@ -617,7 +591,6 @@ export default function LessonScreen() {
               </View>
             )}
 
-            {/* Practical tip */}
             {!!lesson.practical_tip && (
               <View style={localStyles.tipCard}>
                 <Text style={localStyles.tipEmoji}>🌱</Text>
@@ -628,7 +601,6 @@ export default function LessonScreen() {
               </View>
             )}
 
-            {/* CTA: start exercises */}
             <View style={localStyles.startExercisesContainer}>
               <TouchableOpacity onPress={handleStartExercises} activeOpacity={0.85}>
                 <LinearGradient colors={[Colors.primary, Colors.primaryDark]} style={localStyles.startExercisesGradient}>
@@ -642,124 +614,97 @@ export default function LessonScreen() {
               </TouchableOpacity>
             </View>
           </Animated.View>
-        </ScrollView>
-      </SafeAreaView>
-    );
+        ) : (
+          // ──────────────────────────────────────────────────────────────────
+          // EXERCISE VIEW
+          // ──────────────────────────────────────────────────────────────────
+          <Animated.View style={{ opacity: fadeIn }}>
+            <View style={localStyles.exerciseProgressHeader}>
+              <TouchableOpacity onPress={handleBackToContent} style={localStyles.backToContentButton}>
+                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={Colors.primary} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                  <Path d="M19 12H5M12 19l-7-7 7-7" />
+                </Svg>
+                <Text style={localStyles.backToContentText}>{t('learn.backToLesson')}</Text>
+              </TouchableOpacity>
+              <View style={localStyles.exerciseProgressBar}>
+                <View style={[localStyles.exerciseProgressFill, { width: `${((currentExerciseIndex + (isCurrentAnswered ? 1 : 0)) / lesson.exercises.length) * 100}%` }]} />
+              </View>
+              <Text style={localStyles.exerciseProgressText}>{currentExerciseIndex + 1}/{lesson.exercises.length}</Text>
+            </View>
 
-  // ---------------------------------------------------------------------------
-  // Render — exercise view
-  // ---------------------------------------------------------------------------
-  return (
-    <SafeAreaView style={localStyles.container} edges={['top']}>
-      <Stack.Screen options={{ headerShown: true, headerTitle: lesson.title, headerBackTitle: t('common.back') }} />
-      <ScrollView
-        contentContainerStyle={[localStyles.scrollContent, { paddingBottom: TAB_BAR_HEIGHT + BOTTOM_SAFE_AREA + 20 }]}
-        showsVerticalScrollIndicator={false}
-      >
-        <Animated.View style={{ opacity: fadeIn }}>
-          {/* Progress bar */}
-          <View style={localStyles.exerciseProgressHeader}>
-            <TouchableOpacity onPress={handleBackToContent} style={localStyles.backToContentButton}>
-              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={Colors.primary} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-                <Path d="M19 12H5M12 19l-7-7 7-7" />
-              </Svg>
-              <Text style={localStyles.backToContentText}>{t('learn.backToLesson')}</Text>
-            </TouchableOpacity>
-            <View style={localStyles.exerciseProgressBar}>
-              <View
-                style={[
-                  localStyles.exerciseProgressFill,
-                  { width: `${((currentExerciseIndex + (isCurrentAnswered ? 1 : 0)) / lesson.exercises.length) * 100}%` },
-                ]}
+            {currentExercise && (
+              <ExerciseCard
+                key={`${screenKey}-ex-${currentExercise.id}`}
+                exercise={currentExercise}
+                onAnswer={handleExerciseAnswer}
+                isAnswered={isCurrentAnswered}
+                result={currentResult || null}
+                t={t}
               />
-            </View>
-            <Text style={localStyles.exerciseProgressText}>
-              {currentExerciseIndex + 1}/{lesson.exercises.length}
-            </Text>
-          </View>
+            )}
 
-          {/* Current exercise card.
-              The `key` prop forces a full remount of ExerciseCard when the
-              exercise changes, guaranteeing local state (selectedOption,
-              textAnswer) is always initialised fresh — even if the useEffect
-              inside fires after the first render. */}
-          {currentExercise && (
-            <ExerciseCard
-              key={`${screenKey}-ex-${currentExercise.id}`}
-              exercise={currentExercise}
-              onAnswer={handleExerciseAnswer}
-              isAnswered={isCurrentAnswered}
-              result={currentResult || null}
-              t={t}
-            />
-          )}
-
-          {/* Navigation: next exercise or finish lesson */}
-          {isCurrentAnswered && !lessonCompleted && (
-            <View style={localStyles.exerciseNav}>
-              {currentExerciseIndex < lesson.exercises.length - 1 ? (
-                <TouchableOpacity onPress={handleNextExercise} activeOpacity={0.85}>
-                  <LinearGradient colors={[Colors.primary, Colors.primaryDark]} style={localStyles.nextExerciseGradient}>
-                    <Text style={localStyles.nextExerciseText}>{t('learn.nextExercise')}</Text>
-                    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-                      <Path d="M5 12h14M12 5l7 7-7 7" />
-                    </Svg>
-                  </LinearGradient>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity onPress={handleCompleteLesson} activeOpacity={0.85}>
-                  <LinearGradient colors={[Colors.success, Colors.primary]} style={localStyles.finishGradient}>
-                    <Text style={localStyles.finishText}>{t('learn.finishLesson')}</Text>
-                    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-                      <Path d="M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3" />
-                    </Svg>
-                  </LinearGradient>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-
-          {/* Lesson completion card */}
-          {lessonCompleted && (
-            <View style={localStyles.completedContainer}>
-              <LinearGradient colors={[Colors.success, Colors.primary]} style={localStyles.completedCard}>
-                <Text style={localStyles.completedEmoji}>🎉</Text>
-                <Text style={localStyles.completedTitle}>{t('learn.lessonCompleted')}</Text>
-                <Text style={localStyles.completedSubtitle}>
-                  {totalCorrect}/{lesson.exercises.length} {t('learn.correctAnswers')}
-                </Text>
-
-                {/* Next lesson — only when not on last lesson and unit not fully done */}
-                {!isLastLesson && !allLessonsInUnitDone && (
-                  <TouchableOpacity style={localStyles.completedButton} onPress={handleGoToNextLesson} activeOpacity={0.85}>
-                    <Text style={localStyles.completedButtonText}>{t('learn.nextLesson')}</Text>
+            {isCurrentAnswered && !lessonCompleted && (
+              <View style={localStyles.exerciseNav}>
+                {currentExerciseIndex < lesson.exercises.length - 1 ? (
+                  <TouchableOpacity onPress={handleNextExercise} activeOpacity={0.85}>
+                    <LinearGradient colors={[Colors.primary, Colors.primaryDark]} style={localStyles.nextExerciseGradient}>
+                      <Text style={localStyles.nextExerciseText}>{t('learn.nextExercise')}</Text>
+                      <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                        <Path d="M5 12h14M12 5l7 7-7 7" />
+                      </Svg>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity onPress={handleCompleteLesson} activeOpacity={0.85}>
+                    <LinearGradient colors={[Colors.success, Colors.primary]} style={localStyles.finishGradient}>
+                      <Text style={localStyles.finishText}>{t('learn.finishLesson')}</Text>
+                      <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                        <Path d="M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3" />
+                      </Svg>
+                    </LinearGradient>
                   </TouchableOpacity>
                 )}
+              </View>
+            )}
 
-                {/* Back to unit — shown on last lesson or when all lessons done */}
-                {(isLastLesson || allLessonsInUnitDone) && (
-                  <TouchableOpacity style={localStyles.completedButton} onPress={() => router.back()} activeOpacity={0.85}>
-                    <Text style={localStyles.completedButtonText}>{t('learn.backToUnits')}</Text>
-                  </TouchableOpacity>
-                )}
-              </LinearGradient>
-            </View>
-          )}
-        </Animated.View>
+            {lessonCompleted && (
+              <View style={localStyles.completedContainer}>
+                <LinearGradient colors={[Colors.success, Colors.primary]} style={localStyles.completedCard}>
+                  <Text style={localStyles.completedEmoji}>🎉</Text>
+                  <Text style={localStyles.completedTitle}>{t('learn.lessonCompleted')}</Text>
+                  <Text style={localStyles.completedSubtitle}>{totalCorrect}/{lesson.exercises.length} {t('learn.correctAnswers')}</Text>
+                  {!isLastLesson && !allLessonsInUnitDone && (
+                    <TouchableOpacity style={localStyles.completedButton} onPress={handleGoToNextLesson} activeOpacity={0.85}>
+                      <Text style={localStyles.completedButtonText}>{t('learn.nextLesson')}</Text>
+                    </TouchableOpacity>
+                  )}
+                  {(isLastLesson || allLessonsInUnitDone) && (
+                    <TouchableOpacity style={localStyles.completedButton} onPress={() => router.back()} activeOpacity={0.85}>
+                      <Text style={localStyles.completedButtonText}>{t('learn.backToUnits')}</Text>
+                    </TouchableOpacity>
+                  )}
+                </LinearGradient>
+              </View>
+            )}
+          </Animated.View>
+        )}
       </ScrollView>
+
+      {/* ── Tab bar — exact replica of _layout.tsx ── */}
+      <BottomTabBar />
     </SafeAreaView>
   );
 }
 
-// ---------------------------------------------------------------------------
+// =============================================================================
 // Styles
-// ---------------------------------------------------------------------------
+// =============================================================================
+
 const localStyles = StyleSheet.create({
   container:               { flex: 1, backgroundColor: Colors.gray100 },
   scrollContent:           { flexGrow: 1 },
   loadingContainer:        { flex: 1, minHeight: 300, justifyContent: 'center', alignItems: 'center' },
 
-  // Hero banner
   lessonHeader:            { padding: Spacing.xl, paddingBottom: Spacing['2xl'], alignItems: 'center', gap: Spacing.sm },
   lessonEmoji:             { fontSize: 48 },
   lessonTitle:             { fontSize: 22, fontWeight: '800', color: Colors.white, textAlign: 'center' },
@@ -767,7 +712,6 @@ const localStyles = StyleSheet.create({
   lessonMetaItem:          { flexDirection: 'row', alignItems: 'center', gap: 6 },
   lessonMetaText:          { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.8)' },
 
-  // Content sections
   contentSection:          { padding: Spacing.base, marginHorizontal: Spacing.base, marginTop: Spacing.lg, backgroundColor: Colors.white, borderRadius: BorderRadius.xl, ...Shadows.sm },
   contentText:             { fontSize: 16, color: Colors.gray700, lineHeight: 26 },
   section:                 { paddingHorizontal: Spacing.base, paddingTop: Spacing.lg },
@@ -791,7 +735,6 @@ const localStyles = StyleSheet.create({
   startExercisesGradient:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: Spacing.lg, gap: Spacing.md, borderRadius: BorderRadius.xl },
   startExercisesText:      { fontSize: 16, fontWeight: '700', color: Colors.white },
 
-  // Exercise progress header
   exerciseProgressHeader:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.base, paddingVertical: Spacing.md, gap: Spacing.md, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.gray200 },
   backToContentButton:     { flexDirection: 'row', alignItems: 'center', gap: 4 },
   backToContentText:       { fontSize: 13, fontWeight: '600', color: Colors.primary },
@@ -799,7 +742,6 @@ const localStyles = StyleSheet.create({
   exerciseProgressFill:    { height: '100%', backgroundColor: Colors.primary, borderRadius: 3 },
   exerciseProgressText:    { fontSize: 13, fontWeight: '700', color: Colors.gray600 },
 
-  // Exercise card
   exerciseHeader:          { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   exerciseTypeBadge:       { borderRadius: BorderRadius.full, paddingHorizontal: Spacing.sm, paddingVertical: 2 },
   exerciseTypeText:        { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
@@ -811,7 +753,6 @@ const localStyles = StyleSheet.create({
   optionLetterText:        { fontSize: 14, fontWeight: '800', color: Colors.gray600 },
   optionText:              { flex: 1, fontSize: 16, fontWeight: '500', color: Colors.gray700 },
 
-  // Fill blank / open question
   fillBlankContainer:      { gap: Spacing.md },
   fillBlankInput:          { borderWidth: 2, borderColor: Colors.gray200, borderRadius: BorderRadius.lg, padding: Spacing.md, fontSize: 16, color: Colors.black, backgroundColor: Colors.gray100 },
   inputDisabled:           { borderWidth: 2, borderColor: Colors.gray200, borderRadius: BorderRadius.lg, padding: Spacing.md, fontSize: 16, color: Colors.gray400, backgroundColor: Colors.gray100, opacity: 0.5 },
@@ -819,7 +760,6 @@ const localStyles = StyleSheet.create({
   submitButtonDisabled:    { borderRadius: BorderRadius.lg, backgroundColor: Colors.gray300, padding: Spacing.md, alignItems: 'center' },
   submitButtonText:        { fontSize: 16, fontWeight: '700', color: Colors.white },
 
-  // Feedback card
   feedbackCard:            { borderRadius: BorderRadius.lg, padding: Spacing.md, gap: Spacing.sm },
   feedbackHeader:          { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   feedbackTitle:           { fontSize: 16, fontWeight: '800' },
@@ -829,14 +769,12 @@ const localStyles = StyleSheet.create({
   feedbackExplanation:     { fontSize: 15, color: Colors.gray600, lineHeight: 22 },
   feedbackPoints:          { fontSize: 14, fontWeight: '700', color: Colors.primary, textAlign: 'right' },
 
-  // Navigation buttons
   exerciseNav:             { paddingHorizontal: Spacing.base, paddingVertical: Spacing.md },
   nextExerciseGradient:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: Spacing.lg, gap: Spacing.sm, borderRadius: BorderRadius.xl },
   nextExerciseText:        { fontSize: 16, fontWeight: '700', color: Colors.white },
   finishGradient:          { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: Spacing.lg, gap: Spacing.sm, borderRadius: BorderRadius.xl },
   finishText:              { fontSize: 16, fontWeight: '700', color: Colors.white },
 
-  // Completion card
   completedContainer:      { padding: Spacing.xl },
   completedCard:           { borderRadius: BorderRadius['2xl'], padding: Spacing['2xl'], alignItems: 'center', gap: Spacing.md },
   completedEmoji:          { fontSize: 64 },
