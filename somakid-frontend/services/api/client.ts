@@ -2,8 +2,8 @@ import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'ax
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ApiErrorResponse } from '../../types/api.types';
 
-const AI_ENGINE_URL = process.env.EXPO_PUBLIC_AI_ENGINE_URL || 'http:// 10.74.149.162:8000';
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http:// 10.74.149.162:8080';
+const AI_ENGINE_URL = process.env.EXPO_PUBLIC_AI_ENGINE_URL || 'https://somakid-api-121195486619.europe-west1.run.app';
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://somakid-api-121195486619.europe-west1.run.app';
 const DEFAULT_TIMEOUT = 60000;
 const AI_ENGINE_TIMEOUT = 120000;
 const AUTH_TOKEN_KEY = 'somakid_auth_token';

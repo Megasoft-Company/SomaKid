@@ -2,6 +2,9 @@
  * SOMAKID AI - Quiz Screen
  * Interactive quiz with voice feedback, subject selection, and elegant animations.
  * Subjects reload automatically when user changes language.
+ * 
+ * CORRECTED VERSION: Fixed TTS endpoint
+ * - TTS: /api/v1/voice/synthesize-direct
  */
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
@@ -25,6 +28,9 @@ import Svg, { Path } from 'react-native-svg';
 const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 68;
 const BOTTOM_SAFE_AREA = Platform.OS === 'android' ? 24 : 0;
 
+// =============================================================================
+// CORRECTED: Audio playback function - fixed TTS endpoint
+// =============================================================================
 async function playAudioDirect(base64: string): Promise<void> {
   if (!base64 || base64.length < 100) return;
   const uri = `data:audio/mp3;base64,${base64}`;
@@ -49,17 +55,23 @@ async function playAudioDirect(base64: string): Promise<void> {
   }
 }
 
+// =============================================================================
+// CORRECTED: Text-to-Speech using /voice/synthesize-direct endpoint
+// =============================================================================
 async function speakText(text: string, langue: string = 'fr'): Promise<void> {
   try {
-    const res = await aiEngineClient.post('/chat/tts', {
-      text,
-      langue,
+    // CORRECTED: Use /voice/synthesize-direct instead of /chat/tts
+    const res = await aiEngineClient.post('/voice/synthesize-direct', {
+      texte: text,      // Note: 'texte' not 'text'
+      langue: langue,   // Note: 'langue' not 'langue' (same but consistent)
     });
     const audioB64 = res.data?.data?.audio_base64;
     if (audioB64 && audioB64.length > 100) {
       await playAudioDirect(audioB64);
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('TTS error:', e);
+  }
 }
 
 function SubjectSelector({

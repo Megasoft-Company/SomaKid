@@ -124,3 +124,97 @@ export const ChatService = {
     return `session_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
   },
 };
+
+// =============================================================================
+// VOICE SERVICE - CORRECTED ENDPOINTS
+// À AJOUTER À LA FIN DU FICHIER
+// =============================================================================
+
+export type VoiceLanguage = 'fr' | 'ln' | 'sw';
+
+export interface TTSResponse {
+  success: boolean;
+  data: {
+    audio_base64: string;
+    text_length: number;
+    language: string;
+  };
+}
+
+export interface VoiceRecognitionResponse {
+  success: boolean;
+  data: {
+    text: string;
+    language: string;
+    session_id: string;
+  };
+}
+
+export const VoiceService = {
+  /**
+   * Text-to-Speech (TTS) - Convert text to speech audio
+   * CORRECTED: Uses /api/v1/voice/synthesize-direct
+   */
+  async textToSpeech(texte: string, langue: VoiceLanguage = 'fr'): Promise<string | null> {
+    try {
+      const response = await aiEngineClient.post<TTSResponse>(
+        '/voice/synthesize-direct',
+        { texte, langue }
+      );
+      
+      if (response.data.success && response.data.data.audio_base64) {
+        return response.data.data.audio_base64;
+      }
+      console.warn('[VoiceService] TTS returned empty audio');
+      return null;
+    } catch (error) {
+      console.error('[VoiceService] TTS error:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Speech-to-Text (STT) - Convert speech audio to text
+   * CORRECTED: Uses /api/v1/voice/recognize
+   */
+  async speechToText(
+    audioBase64: string,
+    langue: VoiceLanguage = 'fr',
+    sessionId: string
+  ): Promise<string> {
+    try {
+      const response = await aiEngineClient.post<VoiceRecognitionResponse>(
+        '/voice/recognize',
+        {
+          audio_base64: audioBase64,
+          langue: langue,
+          identifiant_session: sessionId,
+        }
+      );
+      
+      if (response.data.success) {
+        return response.data.data.text || '';
+      }
+      return '';
+    } catch (error) {
+      console.error('[VoiceService] STT error:', error);
+      return '';
+    }
+  },
+
+  /**
+   * Get supported voice languages
+   */
+  async getSupportedLanguages(): Promise<Array<{ code: string; name: string; voices: number }>> {
+    try {
+      const response = await aiEngineClient.get<{ success: boolean; data: Array<{ code: string; name: string; voices: number }> }>('/voice/languages');
+      if (response.data.success) {
+        return response.data.data;
+      }
+      return [];
+    } catch (error) {
+      console.error('[VoiceService] Get languages error:', error);
+      return [];
+    }
+  },
+};

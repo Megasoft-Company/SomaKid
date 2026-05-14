@@ -2,6 +2,11 @@
  * SOMAKID AI - Chat Screen
  * Voice-first interface with persistent memory, elegant animations.
  * Full i18n integration with dynamic language detection sent to AI Engine.
+ * 
+ * VERSION FINALE AVEC GEMINI AUDIO NATIF
+ * - Voice recognition: /api/v1/voice/recognize (STT)
+ * - Chat + Audio: /chat/message-audio (Gemini 2.0 Flash Exp)
+ * - Audio généré directement par Gemini (prononciation parfaite)
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
@@ -29,6 +34,23 @@ const STORAGE_SESSION_ID_KEY = 'somakid_voice_session_id';
 const MAX_LOCAL_MESSAGES = 100;
 const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 68;
 const BOTTOM_SAFE_AREA = Platform.OS === 'android' ? 24 : 0;
+
+// =============================================================================
+// SUPPORTED LANGUAGES FOR VOICE (Backend only accepts fr, ln, sw)
+// =============================================================================
+type SupportedVoiceLanguage = 'fr' | 'ln' | 'sw';
+
+function normalizeToSupportedLanguage(lang: string): SupportedVoiceLanguage {
+  const supported: Record<string, SupportedVoiceLanguage> = {
+    'fr': 'fr',
+    'ln': 'ln', 
+    'sw': 'sw',
+    'en': 'fr',
+    'en-US': 'fr',
+    'en-GB': 'fr',
+  };
+  return supported[lang] || 'fr';
+}
 
 async function getOrCreateSessionId(): Promise<string> {
   try {
@@ -191,9 +213,11 @@ const sb = StyleSheet.create({
 function Bubble({ msg, t }: { msg: Message; t: (key: string) => string }) {
   const isUser = msg.role === 'user';
   const anim = useRef(new Animated.Value(0)).current;
+  
   useEffect(() => {
     Animated.spring(anim, { toValue: 1, useNativeDriver: true, tension: 85, friction: 10 }).start();
   }, []);
+  
   return (
     <Animated.View style={[
       styles.bubble,
@@ -331,6 +355,11 @@ export default function ChatScreen() {
     [],
   );
 
+  // =============================================================================
+  // VOICE HANDLER - Version finale avec GEMINI AUDIO NATIF
+  // Step 1: STT via /voice/recognize
+  // Step 2: Chat + Audio natif via /chat/message-audio (Gemini 2.0 Flash Exp)
+  // =============================================================================
   const handleVoicePress = useCallback(async () => {
     if (appState === 'speaking') return;
 
@@ -344,36 +373,63 @@ export default function ChatScreen() {
       const b64 = await audioFileToBase64(uri);
       if (!b64 || b64.length < 100) { setAppState('idle'); return; }
 
-      const userLanguage = getCurrentLanguage();
+      const rawLang = getCurrentLanguage();
+      const voiceLang = normalizeToSupportedLanguage(rawLang);
+      
+      console.log(`[Voice] Using language: ${voiceLang} (original: ${rawLang})`);
 
       try {
         abortRef.current = new AbortController();
-        const res = await aiEngineClient.post(
-          '/chat/voice-chat',
+        
+        // Step 1: Speech to text
+        const sttRes = await aiEngineClient.post(
+          '/voice/recognize',
           {
             audio_base64: b64,
-            langue: userLanguage,
+            langue: voiceLang,
             identifiant_session: sessionId,
           },
           { signal: abortRef.current.signal },
         );
-        const data = res.data?.data ?? {};
-        const transcription = data.transcription ?? '';
-        const somaResponse = data.soma_response ?? '';
-        const audioB64 = data.audio_base64 ?? '';
-
+        
+        const transcription = sttRes.data?.data?.text ?? '';
+        
         if (transcription && transcription.trim()) {
           await addLocalMessage('user', transcription.trim());
-        }
-        if (somaResponse && somaResponse.trim()) {
-          await addLocalMessage('assistant', somaResponse.trim());
-        }
-        if (audioB64 && audioB64.length > 100) {
-          setAppState('speaking');
-          await playAudioDirect(audioB64);
+          
+          // Step 2: Get AI response with NATIVE AUDIO from Gemini 2.0 Flash Exp
+          // Utilise le nouveau endpoint /chat/message-audio qui retourne audio_base64
+          const chatRes = await aiEngineClient.post(
+            '/chat/message-audio',
+            {
+              message: transcription.trim(),
+              langue: rawLang,
+              identifiant_session: sessionId,
+              historique: messages.slice(-10).map(m => ({ role: m.role, content: m.text })),
+            },
+          );
+          
+          const chatData = chatRes.data?.data ?? {};
+          const somaResponse = chatData.reponse || chatData.response || '';
+          const audioBase64 = chatData.audio_base64 || '';
+          
+          if (somaResponse && somaResponse.trim()) {
+            await addLocalMessage('assistant', somaResponse.trim());
+            
+            // Jouer l'audio généré directement par Gemini (prononciation parfaite !)
+            if (audioBase64 && audioBase64.length > 100) {
+              setAppState('speaking');
+              await playAudioDirect(audioBase64);
+            } else {
+              console.warn('[Voice] No audio received from Gemini');
+            }
+          }
+        } else {
+          await addLocalMessage('assistant', t('chat.sorryNotUnderstand'));
         }
       } catch (e: any) {
         if (e?.name !== 'AbortError' && e?.name !== 'CanceledError') {
+          console.error('Voice error:', e);
           await addLocalMessage('assistant', t('chat.sorryError'));
         }
       }
@@ -383,7 +439,7 @@ export default function ChatScreen() {
 
     const started = await startRecording();
     if (started) setAppState('listening');
-  }, [appState, sessionId, addLocalMessage, t]);
+  }, [appState, sessionId, addLocalMessage, t, messages]);
 
   const handleTextSend = useCallback(async () => {
     const msg = textInput.trim();
