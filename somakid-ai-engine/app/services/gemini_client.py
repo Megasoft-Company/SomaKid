@@ -1,11 +1,10 @@
-﻿"""
+"""
 SOMAKID AI Engine - Google Gemini Client
 Low-level client for communicating with the Google Gemini API.
 """
 
 import asyncio
 import time
-import io
 import base64
 from typing import Optional, Dict, Any, List, Tuple
 
@@ -22,7 +21,7 @@ from ..core.logging_config import get_logger, log_performance, log_error
 logger = get_logger(__name__)
 
 TEXT_MODEL = "gemini-2.5-flash-lite"
-AUDIO_MODEL = "gemini-2.0-flash-exp"  # Modèle expérimental avec sortie audio
+AUDIO_MODEL = "gemini-2.0-flash-exp"
 
 
 class GeminiClient:
@@ -71,9 +70,6 @@ class GeminiClient:
         except self.RETRYABLE_EXCEPTIONS as e:
             raise AIServiceException(f"AI text generation failed: {str(e)}")
 
-    # =========================================================================
-    # Génération avec audio via Gemini 2.0 Flash Expérimental
-    # =========================================================================
     @retry(stop=stop_after_attempt(2), wait=wait_exponential(multiplier=1, min=1, max=10), retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS))
     async def generate_with_audio(
         self, 
@@ -82,13 +78,9 @@ class GeminiClient:
         temperature: float = 0.7,
         max_tokens: int = 300
     ) -> Tuple[str, Optional[str]]:
-        """
-        Génère une réponse texte ET audio avec Gemini 2.0 Flash Exp.
-        Retourne: (texte, audio_base64)
-        """
+        """Génère une réponse texte ET audio avec Gemini 2.0 Flash Exp."""
         start_time = time.time()
         try:
-            # Configuration pour sortie audio
             generation_config = {
                 "temperature": temperature,
                 "max_output_tokens": max_tokens,
@@ -102,7 +94,6 @@ class GeminiClient:
                 }
             }
             
-            # Appel asynchrone
             response = await asyncio.to_thread(
                 self.audio_model.generate_content,
                 prompt,
@@ -110,11 +101,8 @@ class GeminiClient:
             )
             
             duration_ms = (time.time() - start_time) * 1000
-            
-            # Extraire le texte
             text = response.text if response.text else ""
             
-            # Extraire l'audio
             audio_base64 = None
             if hasattr(response, '_result') and response._result:
                 candidates = response._result.candidates
