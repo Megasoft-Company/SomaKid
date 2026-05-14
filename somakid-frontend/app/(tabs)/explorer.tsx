@@ -10,7 +10,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
 import { ErrorDisplay } from '../../components/ui/ErrorDisplay';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { takePhoto, pickFromGallery } from '../../utils/media';
+import { takePhoto, pickFromGallery, playAudioBase64, stopCurrentAudio, isAudioPlaying } from '../../utils/media';
 import { formatPoints } from '../../utils/formatting';
 import { aiEngineClient } from '../../services/api/client';
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../constants/theme';
@@ -21,34 +21,23 @@ import Svg, { Path, Circle } from 'react-native-svg';
 const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 68;
 const BOTTOM_SAFE_AREA = Platform.OS === 'android' ? 24 : 0;
 
-async function playAudioDirect(base64: string): Promise<void> {
-  if (!base64 || base64.length < 100) return;
-  const uri = `data:audio/mp3;base64,${base64}`;
-  try {
-    const { createAudioPlayer } = require('expo-audio');
-    const player = createAudioPlayer({ uri });
-    player.play();
-    await new Promise<void>((resolve) => {
-      const check = setInterval(() => { if (!player.playing) { clearInterval(check); resolve(); } }, 200);
-      setTimeout(() => { clearInterval(check); resolve(); }, 20000);
-    });
-  } catch {
-    if (Platform.OS === 'web') {
-      const audio = new Audio(uri);
-      await new Promise<void>((res) => { audio.onended = () => res(); audio.play().catch(res); });
-    }
-  }
-}
-
+// =============================================================================
+// FONCTION TTS CORRIGÉE - Utilise playAudioBase64 avec anti-conflit
+// =============================================================================
 async function speakViaTTS(text: string, langue: string = 'fr'): Promise<void> {
   if (!text || text.trim().length < 3) return;
   try {
-    const res = await aiEngineClient.post('/chat/tts', { text: text.trim(), langue });
+    const res = await aiEngineClient.post('/voice/synthesize-direct', {
+      texte: text.trim(),
+      langue: langue,
+    });
     const audioB64: string = res.data?.data?.audio_base64 ?? '';
     if (audioB64 && audioB64.length > 100) {
-      await playAudioDirect(audioB64);
+      await playAudioBase64(audioB64);
     }
-  } catch {}
+  } catch (error) {
+    console.warn('[Explorer TTS] Error:', error);
+  }
 }
 
 function AnalyzingAnimation({ t }: { t: (key: string) => string }) {
@@ -396,13 +385,30 @@ export default function ExplorerScreen() {
   const [error, setError] = useState<string | null>(null);
   const { activeChild } = useAuth();
 
-  const clearResult = useCallback(() => { setResult(null); setImageUri(null); setError(null); }, []);
+  // Nettoyer l'audio au démontage
+  useEffect(() => {
+    return () => {
+      stopCurrentAudio();
+    };
+  }, []);
+
+  const clearResult = useCallback(async () => {
+    await stopCurrentAudio();
+    setResult(null);
+    setImageUri(null);
+    setError(null);
+    setIsSpeaking(false);
+  }, []);
 
   const handleImageAnalysis = useCallback(async (uri: string) => {
+    // Arrêter tout audio en cours avant de commencer l'analyse
+    await stopCurrentAudio();
+    
     setImageUri(uri);
     setIsAnalyzing(true);
     setError(null);
     setResult(null);
+    setIsSpeaking(false);
 
     const currentLang = getCurrentLanguage();
 
@@ -438,16 +444,17 @@ export default function ExplorerScreen() {
 
       setResult(mappedResult);
 
+      // Construire le texte à lire
       const species = mappedResult.species || '';
       const desc = mappedResult.childDescription || '';
       const role = mappedResult.ecologicalRole || '';
       const fact = mappedResult.funFact || '';
       const action = mappedResult.childAction || '';
-      const textToSpeak = `${species}. ${desc} ${role} ${fact} ${action}`;
+      const textToSpeak = `${species}. ${desc} ${role} ${fact} ${action}`.trim();
 
-      if (textToSpeak.trim().length > 3) {
+      if (textToSpeak.length > 5) {
         setIsSpeaking(true);
-        await speakViaTTS(textToSpeak.trim(), currentLang);
+        await speakViaTTS(textToSpeak, currentLang);
         setIsSpeaking(false);
       }
     } catch {
@@ -457,8 +464,15 @@ export default function ExplorerScreen() {
     }
   }, [activeChild, t]);
 
-  const handleTakePhoto = useCallback(async () => { const uri = await takePhoto(); if (uri) handleImageAnalysis(uri); }, [handleImageAnalysis]);
-  const handlePickGallery = useCallback(async () => { const uri = await pickFromGallery(); if (uri) handleImageAnalysis(uri); }, [handleImageAnalysis]);
+  const handleTakePhoto = useCallback(async () => { 
+    const uri = await takePhoto(); 
+    if (uri) handleImageAnalysis(uri); 
+  }, [handleImageAnalysis]);
+  
+  const handlePickGallery = useCallback(async () => { 
+    const uri = await pickFromGallery(); 
+    if (uri) handleImageAnalysis(uri); 
+  }, [handleImageAnalysis]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

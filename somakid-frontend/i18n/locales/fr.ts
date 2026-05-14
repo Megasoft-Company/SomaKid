@@ -287,5 +287,6 @@ export default {
     review: 'Révision',
     exam: 'Examen',
     finish: 'Terminer',
+    nextLesson: 'Leçon suivante',
   },
 };

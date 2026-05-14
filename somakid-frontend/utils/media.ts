@@ -1,14 +1,121 @@
 /**
  * SOMAKID AI - Media Utilities
  * Image processing, camera, gallery, and audio recording helpers.
- *
- * Audio: expo-audio (SDK 52+, inclus dans Expo Go)
- * Docs: https://docs.expo.dev/versions/latest/sdk/audio/
- * FileSystem: expo-file-system/legacy (API compatible Expo Go)
+ * 
+ * CORRECTION: Audio conflict prevention - ensures only one audio plays at a time
+ * - Single active player globally
+ * - Stops current playback before starting new one
+ * - Proper cleanup
  */
 
 import * as ImagePicker from 'expo-image-picker';
 import { Alert, Platform } from 'react-native';
+
+// =============================================================================
+// AUDIO PLAYBACK MANAGER - Évite les lectures simultanées
+// =============================================================================
+
+let currentAudioPlayer: any = null;
+let currentAudioUri: string | null = null;
+
+/**
+ * Arrête toute lecture audio en cours immédiatement
+ */
+export async function stopCurrentAudio(): Promise<void> {
+  if (currentAudioPlayer) {
+    try {
+      // Pause et arrête le lecteur actuel
+      if (typeof currentAudioPlayer.pause === 'function') {
+        await currentAudioPlayer.pause();
+      }
+      if (typeof currentAudioPlayer.stop === 'function') {
+        await currentAudioPlayer.stop();
+      }
+      if (typeof currentAudioPlayer.release === 'function') {
+        await currentAudioPlayer.release();
+      }
+      if (typeof currentAudioPlayer.remove === 'function') {
+        await currentAudioPlayer.remove();
+      }
+    } catch (e) {
+      console.warn('[AudioManager] Error stopping current audio:', e);
+    } finally {
+      currentAudioPlayer = null;
+      currentAudioUri = null;
+    }
+  }
+}
+
+/**
+ * Joue un fichier audio en Base64 avec gestion des conflits
+ * Arrête toute lecture en cours avant de jouer la nouvelle
+ */
+export async function playAudioBase64(base64: string): Promise<void> {
+  if (!base64 || base64.length < 100) return;
+  
+  // Arrêter toute lecture en cours
+  await stopCurrentAudio();
+  
+  const uri = `data:audio/mp3;base64,${base64}`;
+  
+  try {
+    const { createAudioPlayer } = require('expo-audio');
+    const player = createAudioPlayer({ uri });
+    
+    // Sauvegarder le player actuel
+    currentAudioPlayer = player;
+    currentAudioUri = uri;
+    
+    // Configurer la fin de lecture pour nettoyer
+    player.addListener('playbackStatusUpdate', (status: any) => {
+      if (status.didJustFinish) {
+        // La lecture est terminée, nettoyer
+        if (currentAudioPlayer === player) {
+          currentAudioPlayer = null;
+          currentAudioUri = null;
+        }
+      }
+    });
+    
+    // Jouer
+    player.play();
+    
+  } catch (error) {
+    console.warn('[AudioManager] Error playing audio:', error);
+    // Nettoyer en cas d'erreur
+    if (currentAudioPlayer) {
+      currentAudioPlayer = null;
+      currentAudioUri = null;
+    }
+    
+    // Fallback Web
+    if (Platform.OS === 'web') {
+      const audio = new Audio(uri);
+      currentAudioPlayer = audio;
+      audio.onended = () => {
+        if (currentAudioPlayer === audio) {
+          currentAudioPlayer = null;
+          currentAudioUri = null;
+        }
+      };
+      audio.play().catch(console.warn);
+    }
+  }
+}
+
+/**
+ * Vérifie si un audio est en cours de lecture
+ */
+export function isAudioPlaying(): boolean {
+  return currentAudioPlayer !== null;
+}
+
+/**
+ * Libère complètement le lecteur audio
+ */
+export async function releaseAudioPlayer(): Promise<void> {
+  await stopCurrentAudio();
+}
 
 // =============================================================================
 // Image Functions
@@ -64,10 +171,6 @@ export function isLocalUri(uri: string): boolean {
 
 // =============================================================================
 // Audio Recording — expo-audio (API impérative)
-// AudioModule.requestRecordingPermissionsAsync()
-// AudioModule.AudioRecorder(RecordingPresets.HIGH_QUALITY)
-// recorder.prepareToRecordAsync() + .record() + .stop()
-// recorder.uri → chemin du fichier enregistré
 // =============================================================================
 
 let activeRecorder: any = null;

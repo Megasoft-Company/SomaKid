@@ -288,5 +288,6 @@ export default {
     review: 'Révision',
     exam: 'Examen',
     finish: 'Kosilisa',
+    nextLesson: 'Leçon oyo elandi',
   },
 };
