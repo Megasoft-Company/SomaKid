@@ -1,0 +1,3 @@
+# .github/CODEOWNERS
+*.env.example @pacomeissa
+app/services/gemini_client.py @pacomeissa

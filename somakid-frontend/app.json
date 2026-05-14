@@ -17,6 +17,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "ai.somakid.app",
       "buildNumber": "1",
+      "deploymentTarget": "15.1",
       "infoPlist": {
         "NSCameraUsageDescription": "SOMAKID AI uses the camera to identify plants and animals in your environment.",
         "NSMicrophoneUsageDescription": "SOMAKID AI uses the microphone for voice interactions with the AI tutor.",
@@ -29,11 +30,13 @@
         "backgroundColor": "#0F5038"
       },
       "package": "ai.somakid.app",
-      "versionCode": 1,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
-        "android.permission.READ_EXTERNAL_STORAGE"
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ]
     },
     "web": {
@@ -54,8 +57,14 @@
         "origin": false
       },
       "eas": {
-        "projectId": "somakid-ai-project"
+        "projectId": "c98022a3-56a4-4fd7-ae85-2fffe3b76965"
       }
-    }
+    },
+    "androidStatusBar": {
+      "backgroundColor": "#0F5038",
+      "barStyle": "light-content"
+    },
+    "description": "AI-powered educational platform for climate resilience and biodiversity education in the DRC.",
+    "githubUrl": "https://github.com/pacomeissa/SomaKid"
   }
 }
