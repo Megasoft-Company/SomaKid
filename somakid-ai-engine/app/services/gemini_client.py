@@ -1,81 +1,185 @@
-﻿@router.post("/message-audio")
-@limiter.limit("20/minute")
-async def send_message_audio(
-    request: Request, 
-    body: ChatMessageRequest,
-    memory_repo: MemoryRepository = Depends(get_memory_repository)
-):
-    """
-    Envoie un message et reçoit une réponse AUDIO directement de Gemini.
-    Utilise gemini-2.0-flash-exp pour génération audio native.
-    """
-    try:
-        from ...services.gemini_client import GeminiClient
-        
-        session_id = body.identifiant_session or body.session_id or f"session_{int(time.time())}"
-        
-        # Récupérer l'historique
-        history = body.historique or body.history or []
-        
-        # Construire le prompt avec contexte
-        system_prompt = f"""Tu es SOMA, un tuteur IA bienveillant pour enfants en RDC.
-        Tu parles {body.langue}. Réponds de manière courte, claire et adaptée aux enfants (8-12 ans).
-        Tu es expert en biodiversité, climat et environnement.
-        Sois encourageant, positif et utilise des mots simples.
-        N'utilise JAMAIS d'emoji, de caractères spéciaux ou de formatage.
-        Réponds comme si tu parlais directement à l'enfant, avec une voix douce et chaleureuse."""
-        
-        full_prompt = f"{system_prompt}\n\n"
-        
-        # Ajouter l'historique récent
-        if history:
-            full_prompt += "Historique de la conversation:\n"
-            for msg in history[-6:]:
-                full_prompt += f"{msg.get('role', 'user')}: {msg.get('content', '')}\n"
-        
-        full_prompt += f"\nEnfant: {body.message}\nSOMA:"
-        
-        # Initialiser Gemini client
-        gemini_client = GeminiClient(api_key=settings.GEMINI_API_KEY)
-        
-        # Générer texte + audio
-        response_text, audio_base64 = await gemini_client.generate_with_audio(
-            prompt=full_prompt,
-            language=body.langue,
-            temperature=0.7,
-            max_tokens=200
-        )
-        
-        if not response_text:
-            response_text = "Je suis désolé, je n'ai pas bien compris. Peux-tu répéter ta question ?"
-        
-        # Sauvegarder l'historique
-        updated_history = history + [
-            {"role": "user", "content": body.message},
-            {"role": "assistant", "content": response_text}
-        ]
-        
-        asyncio.create_task(asyncio.to_thread(
-            memory_repo.save_progress,
-            f"chat_history:{session_id}",
-            {"messages": updated_history[-100:], "updated_at": time.time()},
-        ))
-        
-        return JSONResponse(content={
-            "success": True,
-            "data": {
-                "reponse": response_text,
-                "audio_base64": audio_base64 or "",
-                "points_gagnes": 5
-            },
-            "history_length": len(updated_history),
-            "session_id": session_id,
-        })
-        
-    except Exception as e:
-        logger.error("message_audio_error", error=str(e))
-        return JSONResponse(content={
-            "success": False,
-            "error": str(e),
-            "data": {"reponse": "Désolé, une erreur technique s'est produite.", "audio_base64": ""}
-        }, status_code=500)
+﻿"""
+SOMAKID AI Engine - Google Gemini Client
+Low-level client for communicating with the Google Gemini API.
+"""
+
+import asyncio
+import time
+import io
+import base64
+from typing import Optional, Dict, Any, List, Tuple
+
+import google.generativeai as genai
+from google.generativeai import GenerativeModel
+from google.generativeai.types import GenerationConfig
+from google.api_core import exceptions as google_exceptions
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
+from ..core.config import settings
+from ..core.exceptions import AIServiceException, RateLimitException
+from ..core.logging_config import get_logger, log_performance, log_error
+
+logger = get_logger(__name__)
+
+TEXT_MODEL = "gemini-2.5-flash-lite"
+AUDIO_MODEL = "gemini-2.0-flash-exp"  # Modèle expérimental avec sortie audio
+
+
+class GeminiClient:
+    RETRYABLE_EXCEPTIONS = (
+        google_exceptions.ServiceUnavailable,
+        google_exceptions.ResourceExhausted,
+        google_exceptions.InternalServerError,
+        google_exceptions.DeadlineExceeded,
+        ConnectionError,
+        TimeoutError,
+    )
+
+    def __init__(self, api_key: str, model_name: str = TEXT_MODEL, generation_config: Optional[Dict[str, Any]] = None):
+        if not api_key:
+            raise AIServiceException("Gemini API key is required.")
+        self.api_key = api_key
+        self.model_name = model_name
+        self.generation_config = generation_config or settings.gemini_generation_config
+        try:
+            genai.configure(api_key=self.api_key)
+            generation_config_obj = GenerationConfig(
+                max_output_tokens=self.generation_config.get("max_output_tokens", 512),
+                temperature=self.generation_config.get("temperature", 0.6),
+                top_p=self.generation_config.get("top_p", 0.95),
+                top_k=self.generation_config.get("top_k", 40),
+            )
+            self.text_model = GenerativeModel(model_name=TEXT_MODEL, generation_config=generation_config_obj)
+            self.vision_model = GenerativeModel(model_name=TEXT_MODEL, generation_config=generation_config_obj)
+            self.audio_model = GenerativeModel(model_name=AUDIO_MODEL)
+            logger.info("gemini_client_initialized", model=TEXT_MODEL, audio_model=AUDIO_MODEL)
+        except Exception as e:
+            logger.error("gemini_client_init_failed", error=str(e))
+            raise AIServiceException(f"Failed to initialize Gemini client: {str(e)}")
+
+    @retry(stop=stop_after_attempt(2), wait=wait_exponential(multiplier=1, min=1, max=10), retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS))
+    async def generate_text(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+        start_time = time.time()
+        try:
+            full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+            response = await asyncio.to_thread(self.text_model.generate_content, full_prompt)
+            duration_ms = (time.time() - start_time) * 1000
+            log_performance(logger, "gemini_text_generation", duration_ms=duration_ms, prompt_length=len(prompt))
+            return response.text
+        except google_exceptions.ResourceExhausted:
+            raise RateLimitException("AI service rate limit exceeded.")
+        except self.RETRYABLE_EXCEPTIONS as e:
+            raise AIServiceException(f"AI text generation failed: {str(e)}")
+
+    # =========================================================================
+    # Génération avec audio via Gemini 2.0 Flash Expérimental
+    # =========================================================================
+    @retry(stop=stop_after_attempt(2), wait=wait_exponential(multiplier=1, min=1, max=10), retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS))
+    async def generate_with_audio(
+        self, 
+        prompt: str, 
+        language: str = "fr",
+        temperature: float = 0.7,
+        max_tokens: int = 300
+    ) -> Tuple[str, Optional[str]]:
+        """
+        Génère une réponse texte ET audio avec Gemini 2.0 Flash Exp.
+        Retourne: (texte, audio_base64)
+        """
+        start_time = time.time()
+        try:
+            # Configuration pour sortie audio
+            generation_config = {
+                "temperature": temperature,
+                "max_output_tokens": max_tokens,
+                "response_modalities": ["AUDIO"],
+                "speech_config": {
+                    "voice_config": {
+                        "prebuilt_voice_config": {
+                            "voice_name": f"fr-FR-{language.upper()}-Standard-A"
+                        }
+                    }
+                }
+            }
+            
+            # Appel asynchrone
+            response = await asyncio.to_thread(
+                self.audio_model.generate_content,
+                prompt,
+                generation_config=generation_config
+            )
+            
+            duration_ms = (time.time() - start_time) * 1000
+            
+            # Extraire le texte
+            text = response.text if response.text else ""
+            
+            # Extraire l'audio
+            audio_base64 = None
+            if hasattr(response, '_result') and response._result:
+                candidates = response._result.candidates
+                if candidates:
+                    for part in candidates[0].content.parts:
+                        if hasattr(part, 'inline_data') and part.inline_data.mime_type.startswith('audio/'):
+                            audio_base64 = base64.b64encode(part.inline_data.data).decode('utf-8')
+                            logger.info("gemini_audio_generated", audio_length=len(audio_base64), duration_ms=duration_ms)
+                            break
+            
+            if not audio_base64:
+                logger.warning("gemini_audio_not_available", text_length=len(text))
+            
+            return text, audio_base64
+            
+        except google_exceptions.ResourceExhausted:
+            raise RateLimitException("AI audio service rate limit exceeded.")
+        except self.RETRYABLE_EXCEPTIONS as e:
+            logger.error("gemini_audio_error", error=str(e))
+            raise AIServiceException(f"AI audio generation failed: {str(e)}")
+
+    @retry(stop=stop_after_attempt(2), wait=wait_exponential(multiplier=1, min=1, max=10), retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS))
+    async def generate_with_image(self, prompt: str, image_bytes: bytes, mime_type: str = "image/jpeg") -> str:
+        start_time = time.time()
+        try:
+            image_part = {"mime_type": mime_type, "data": image_bytes}
+            response = await asyncio.to_thread(self.vision_model.generate_content, [prompt, image_part])
+            duration_ms = (time.time() - start_time) * 1000
+            log_performance(logger, "gemini_vision_generation", duration_ms=duration_ms, image_size_bytes=len(image_bytes))
+            return response.text
+        except google_exceptions.ResourceExhausted:
+            raise RateLimitException("AI vision service rate limit exceeded.")
+        except self.RETRYABLE_EXCEPTIONS as e:
+            raise AIServiceException(f"AI vision analysis failed: {str(e)}")
+
+    @staticmethod
+    def extract_json_from_response(text: str) -> Dict[str, Any]:
+        import json
+        cleaned = text.strip()
+        try: 
+            return json.loads(cleaned)
+        except json.JSONDecodeError: 
+            pass
+        if "`json" in cleaned:
+            cleaned = cleaned.split("`json")[1]
+            if "`" in cleaned: 
+                cleaned = cleaned.split("`")[0]
+        elif "`" in cleaned:
+            cleaned = cleaned.split("`")[1]
+            if "`" in cleaned: 
+                cleaned = cleaned.split("`")[0]
+        start = cleaned.find("{")
+        end = cleaned.rfind("}")
+        if start != -1 and end != -1 and start < end:
+            try: 
+                return json.loads(cleaned[start:end + 1])
+            except json.JSONDecodeError: 
+                pass
+        raise AIServiceException("No valid JSON found in AI response.")
+
+    async def health_check(self) -> Dict[str, Any]:
+        try:
+            start = time.time()
+            response = await self.generate_text(prompt="Respond with 'OK' only.")
+            duration_ms = (time.time() - start) * 1000
+            return {"status": "healthy", "model": self.model_name, "latency_ms": round(duration_ms, 2), "response_ok": "OK" in response}
+        except Exception as e:
+            return {"status": "unhealthy", "model": self.model_name, "error": str(e)}

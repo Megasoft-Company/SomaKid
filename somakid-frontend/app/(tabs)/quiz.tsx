@@ -3,8 +3,9 @@
  * Interactive quiz with voice feedback, subject selection, and elegant animations.
  * Subjects reload automatically when user changes language.
  * 
- * CORRECTED VERSION: Fixed TTS endpoint
+ * VERSION FINALE CORRIGÉE - Avec gestion anti-conflit audio
  * - TTS: /api/v1/voice/synthesize-direct
+ * - Anti-conflit audio: une seule lecture audio à la fois
  */
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
@@ -24,50 +25,24 @@ import { getCurrentLanguage, onLanguageChange } from '../../i18n';
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../constants/theme';
 import { QuizSubject } from '../../types/api.types';
 import Svg, { Path } from 'react-native-svg';
+import { playAudioBase64, stopCurrentAudio, isAudioPlaying } from '../../utils/media';
 
 const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 68;
 const BOTTOM_SAFE_AREA = Platform.OS === 'android' ? 24 : 0;
 
 // =============================================================================
-// CORRECTED: Audio playback function - fixed TTS endpoint
-// =============================================================================
-async function playAudioDirect(base64: string): Promise<void> {
-  if (!base64 || base64.length < 100) return;
-  const uri = `data:audio/mp3;base64,${base64}`;
-  try {
-    const { createAudioPlayer } = require('expo-audio');
-    const player = createAudioPlayer({ uri });
-    player.play();
-    await new Promise<void>((resolve) => {
-      const check = setInterval(() => {
-        if (!player.playing) { clearInterval(check); resolve(); }
-      }, 200);
-      setTimeout(() => { clearInterval(check); resolve(); }, 20000);
-    });
-  } catch {
-    if (Platform.OS === 'web') {
-      const audio = new Audio(uri);
-      await new Promise<void>((res) => {
-        audio.onended = () => res();
-        audio.play().catch(res);
-      });
-    }
-  }
-}
-
-// =============================================================================
-// CORRECTED: Text-to-Speech using /voice/synthesize-direct endpoint
+// Text-to-Speech using /voice/synthesize-direct endpoint avec anti-conflit
 // =============================================================================
 async function speakText(text: string, langue: string = 'fr'): Promise<void> {
+  if (!text || text.trim().length < 3) return;
   try {
-    // CORRECTED: Use /voice/synthesize-direct instead of /chat/tts
     const res = await aiEngineClient.post('/voice/synthesize-direct', {
-      texte: text,      // Note: 'texte' not 'text'
-      langue: langue,   // Note: 'langue' not 'langue' (same but consistent)
+      texte: text.trim(),
+      langue: langue,
     });
     const audioB64 = res.data?.data?.audio_base64;
     if (audioB64 && audioB64.length > 100) {
-      await playAudioDirect(audioB64);
+      await playAudioBase64(audioB64);
     }
   } catch (e) {
     console.warn('TTS error:', e);
@@ -154,7 +129,7 @@ function QuizQuestionCard({
     hasPlayedRef.current = currentQuestion.id;
 
     if (currentQuestion.audioBase64 && currentQuestion.audioBase64.length > 100) {
-      playAudioDirect(currentQuestion.audioBase64).then(() => {
+      playAudioBase64(currentQuestion.audioBase64).then(() => {
         onQuestionRead?.();
       });
     } else {
@@ -276,6 +251,13 @@ export default function QuizScreen() {
   const explanationSpokenRef = useRef<string | null>(null);
   const currentLangRef = useRef<string>(getCurrentLanguage());
 
+  // Nettoyer l'audio au démontage du composant
+  useEffect(() => {
+    return () => {
+      stopCurrentAudio();
+    };
+  }, []);
+
   useEffect(() => {
     const loadForLanguage = (lang: string) => {
       currentLangRef.current = lang;
@@ -305,7 +287,9 @@ export default function QuizScreen() {
       : `${t('quiz.incorrect')}. ${currentQuestion.explanation}`;
 
     setIsSpeaking(true);
-    speakText(feedback, lang).finally(() => setIsSpeaking(false));
+    speakText(feedback, lang).finally(() => {
+      setIsSpeaking(false);
+    });
   }, [showExplanation, currentQuestion?.id, t]);
 
   const handleReplayQuestion = useCallback(async () => {
@@ -313,7 +297,7 @@ export default function QuizScreen() {
     setIsReadingQuestion(true);
     const lang = currentLangRef.current;
     if (currentQuestion.audioBase64 && currentQuestion.audioBase64.length > 100) {
-      await playAudioDirect(currentQuestion.audioBase64);
+      await playAudioBase64(currentQuestion.audioBase64);
     } else {
       await speakText(currentQuestion.question, lang);
     }

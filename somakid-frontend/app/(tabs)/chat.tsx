@@ -3,10 +3,11 @@
  * Voice-first interface with persistent memory, elegant animations.
  * Full i18n integration with dynamic language detection sent to AI Engine.
  * 
- * VERSION FINALE AVEC GEMINI AUDIO NATIF
+ * VERSION FINALE CORRIGÉE - Flux vocal fonctionnel AVEC ANTI-CONFLIT AUDIO
  * - Voice recognition: /api/v1/voice/recognize (STT)
- * - Chat + Audio: /chat/message-audio (Gemini 2.0 Flash Exp)
- * - Audio généré directement par Gemini (prononciation parfaite)
+ * - Chat response: /api/v1/chat/message
+ * - Text-to-Speech: /api/v1/voice/synthesize-direct (TTS séparé)
+ * - Anti-conflit audio: une seule lecture audio à la fois
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
@@ -19,7 +20,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Path, Circle } from 'react-native-svg';
-import { startRecording, stopRecording, audioFileToBase64 } from '../../utils/media';
+import { 
+  startRecording, 
+  stopRecording, 
+  audioFileToBase64,
+  playAudioBase64,
+  stopCurrentAudio,
+  isAudioPlaying
+} from '../../utils/media';
 import { takePhoto, pickFromGallery } from '../../utils/media';
 import { aiEngineClient } from '../../services/api/client';
 import { useChatStore } from '../../store/chat.store';
@@ -81,30 +89,6 @@ async function saveLocalHistory(messages: Message[]): Promise<void> {
     await AsyncStorage.setItem(STORAGE_VOICE_HISTORY_KEY, JSON.stringify(trimmed));
   } catch (e) {
     console.warn('saveLocalHistory error', e);
-  }
-}
-
-async function playAudioDirect(base64: string): Promise<void> {
-  if (!base64 || base64.length < 100) return;
-  const uri = `data:audio/mp3;base64,${base64}`;
-  try {
-    const { createAudioPlayer } = require('expo-audio');
-    const player = createAudioPlayer({ uri });
-    player.play();
-    await new Promise<void>((resolve) => {
-      const check = setInterval(() => {
-        if (!player.playing) { clearInterval(check); resolve(); }
-      }, 200);
-      setTimeout(() => { clearInterval(check); resolve(); }, 20000);
-    });
-  } catch {
-    if (Platform.OS === 'web') {
-      const audio = new Audio(uri);
-      await new Promise<void>((res) => {
-        audio.onended = () => res();
-        audio.play().catch(res);
-      });
-    }
   }
 }
 
@@ -290,6 +274,7 @@ export default function ChatScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isAudioPlayingLocal, setIsAudioPlayingLocal] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<ScrollView>(null);
@@ -301,6 +286,18 @@ export default function ChatScreen() {
   const storeSending = useChatStore((s) => s.isSending);
   const sendImage = useChatStore((s) => s.sendImage);
   const sendMessage = useChatStore((s) => s.sendMessage);
+
+  // Vérifier périodiquement si l'audio joue encore
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const playing = isAudioPlaying();
+      setIsAudioPlayingLocal(playing);
+      if (!playing && appState === 'speaking') {
+        setAppState('idle');
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, [appState]);
 
   useEffect(() => {
     (async () => {
@@ -356,12 +353,15 @@ export default function ChatScreen() {
   );
 
   // =============================================================================
-  // VOICE HANDLER - Version finale avec GEMINI AUDIO NATIF
-  // Step 1: STT via /voice/recognize
-  // Step 2: Chat + Audio natif via /chat/message-audio (Gemini 2.0 Flash Exp)
+  // VOICE HANDLER - AVEC GESTION ANTI-CONFLIT AUDIO
   // =============================================================================
   const handleVoicePress = useCallback(async () => {
-    if (appState === 'speaking') return;
+    // Si l'application est en train de parler, arrêter l'audio en cours
+    if (appState === 'speaking') {
+      await stopCurrentAudio();
+      setAppState('idle');
+      return;
+    }
 
     if (appState === 'listening') {
       abortRef.current?.abort();
@@ -397,10 +397,9 @@ export default function ChatScreen() {
         if (transcription && transcription.trim()) {
           await addLocalMessage('user', transcription.trim());
           
-          // Step 2: Get AI response with NATIVE AUDIO from Gemini 2.0 Flash Exp
-          // Utilise le nouveau endpoint /chat/message-audio qui retourne audio_base64
+          // Step 2: Get AI response via standard chat endpoint
           const chatRes = await aiEngineClient.post(
-            '/chat/message-audio',
+            '/chat/message',
             {
               message: transcription.trim(),
               langue: rawLang,
@@ -411,29 +410,39 @@ export default function ChatScreen() {
           
           const chatData = chatRes.data?.data ?? {};
           const somaResponse = chatData.reponse || chatData.response || '';
-          const audioBase64 = chatData.audio_base64 || '';
           
           if (somaResponse && somaResponse.trim()) {
             await addLocalMessage('assistant', somaResponse.trim());
             
-            // Jouer l'audio généré directement par Gemini (prononciation parfaite !)
-            if (audioBase64 && audioBase64.length > 100) {
+            // Step 3: Convert response to speech using TTS endpoint
+            const ttsRes = await aiEngineClient.post(
+              '/voice/synthesize-direct',
+              {
+                texte: somaResponse.trim(),
+                langue: voiceLang,
+              },
+            );
+            
+            const audioB64 = ttsRes.data?.data?.audio_base64;
+            if (audioB64 && audioB64.length > 100) {
               setAppState('speaking');
-              await playAudioDirect(audioBase64);
+              // Utiliser playAudioBase64 qui gère automatiquement l'arrêt des lectures en cours
+              await playAudioBase64(audioB64);
             } else {
-              console.warn('[Voice] No audio received from Gemini');
+              setAppState('idle');
             }
           }
         } else {
           await addLocalMessage('assistant', t('chat.sorryNotUnderstand'));
+          setAppState('idle');
         }
       } catch (e: any) {
         if (e?.name !== 'AbortError' && e?.name !== 'CanceledError') {
           console.error('Voice error:', e);
           await addLocalMessage('assistant', t('chat.sorryError'));
         }
+        setAppState('idle');
       }
-      setAppState('idle');
       return;
     }
 
@@ -469,6 +478,7 @@ export default function ChatScreen() {
   }, [sendImage]);
 
   const handleClearHistory = useCallback(async () => {
+    await stopCurrentAudio();
     setMessages([]);
     await AsyncStorage.removeItem(STORAGE_VOICE_HISTORY_KEY);
   }, []);
@@ -561,14 +571,16 @@ export default function ChatScreen() {
           !hasMsgs && styles.voiceZoneFull,
           { transform: [{ scale: orbScale }], opacity: fadeIn, paddingBottom: TAB_BAR_HEIGHT + BOTTOM_SAFE_AREA + 20 },
         ]}>
-          <Text style={styles.orbStatus}>{orb.label}</Text>
+          <Text style={styles.orbStatus}>
+            {appState === 'speaking' && isAudioPlayingLocal ? t('chat.speaking') : orb.label}
+          </Text>
           <View style={styles.orbArea}>
             <OrbPulse active={appState === 'listening'} color={orb.statusColor} />
             <TouchableOpacity
               onPress={handleVoicePress}
               activeOpacity={0.85}
-              disabled={appState === 'speaking'}
-              style={[styles.orbBtn, appState === 'speaking' && { opacity: 0.6 }]}
+              disabled={appState === 'thinking'}
+              style={[styles.orbBtn, (appState === 'thinking' || appState === 'speaking') && { opacity: 0.6 }]}
             >
               <LinearGradient
                 colors={orb.colors}
