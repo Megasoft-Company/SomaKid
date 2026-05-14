@@ -267,6 +267,7 @@ export default {
     keyPoints: 'Mambo Muhimu',
     didYouKnow: 'Je, unajua?',
     practicalTip: 'Ushauri wa Vitendo',
+    correctAnswer: 'Jibu sahihi',
     nextExercise: 'Zoezi linalofuata',
     finishLesson: 'Maliza somo',
     lessonCompleted: 'Somo Limekamilika!',

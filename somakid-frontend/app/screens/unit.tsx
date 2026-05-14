@@ -5,15 +5,7 @@
  */
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Animated,
-  Platform,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams, Stack } from 'expo-router';
@@ -21,241 +13,100 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { useAuth } from '../../hooks/useAuth';
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ErrorDisplay } from '../../components/ui/ErrorDisplay';
-import { formatPoints } from '../../utils/formatting';
 import { aiEngineClient } from '../../services/api/client';
 import { getCurrentLanguage } from '../../i18n';
-import {
-  Colors,
-  Spacing,
-  BorderRadius,
-  Shadows,
-} from '../../constants/theme';
-import Svg, { Path, Circle } from 'react-native-svg';
+import { Colors, Spacing, BorderRadius, Shadows } from '../../constants/theme';
+import Svg, { Path, Circle, Rect } from 'react-native-svg';
 
 const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 68;
 const BOTTOM_SAFE_AREA = Platform.OS === 'android' ? 24 : 0;
 
-interface UnitDetail {
-  id: string;
-  unit_number: number;
-  name: string;
-  description: string;
-  total_lessons: number;
-  required_score: number;
-  is_locked: boolean;
-  is_completed: boolean;
-  test_passed: boolean;
-  lessons_completed: number;
-}
+interface UnitDetail { id: string; unit_number: number; name: string; description: string; total_lessons: number; required_score: number; is_locked: boolean; is_completed: boolean; test_passed: boolean; lessons_completed: number; }
+interface LessonItem { id: string; lesson_number: number; title: string; lesson_type: 'theory' | 'practice' | 'review' | 'exam'; emoji: string; duration_minutes: number; is_completed: boolean; is_locked: boolean; }
 
-interface LessonItem {
-  id: string;
-  lesson_number: number;
-  title: string;
-  lesson_type: 'theory' | 'practice' | 'review' | 'exam';
-  emoji: string;
-  duration_minutes: number;
-  is_completed: boolean;
-  is_locked: boolean;
-}
+function LessonRow({ lesson, color, isLast, onPress, t }: { lesson: LessonItem; color: string; isLast: boolean; onPress: () => void; t: (key: string) => string; }) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const handlePressIn = () => Animated.spring(scaleAnim, { toValue: 0.97, tension: 120, friction: 10, useNativeDriver: true }).start();
+  const handlePressOut = () => Animated.spring(scaleAnim, { toValue: 1, tension: 120, friction: 10, useNativeDriver: true }).start();
 
-function LessonRow({
-  lesson,
-  color,
-  isLast,
-  onPress,
-  t,
-}: {
-  lesson: LessonItem;
-  color: string;
-  isLast: boolean;
-  onPress: () => void;
-  t: (key: string) => string;
-}) {
-  const typeEmoji: Record<string, string> = {
-    theory: '📖',
-    practice: '✍️',
-    review: '🔄',
-    exam: '🏆',
-  };
-
-  const typeLabel: Record<string, string> = {
-    theory: t('learn.theory'),
-    practice: t('learn.practice'),
-    review: t('learn.review'),
-    exam: t('learn.exam'),
-  };
+  const typeEmoji: Record<string, string> = { theory: '📖', practice: '✍️', review: '🔄', exam: '🏆' };
+  const typeLabel: Record<string, string> = { theory: t('learn.theory'), practice: t('learn.practice'), review: t('learn.review'), exam: t('learn.exam') };
+  const isActive = !lesson.is_locked && !lesson.is_completed;
 
   return (
-    <TouchableOpacity
-      style={[styles.lessonRow, lesson.is_locked && styles.lessonRowLocked]}
-      onPress={onPress}
-      disabled={lesson.is_locked}
-      activeOpacity={0.8}
-    >
-      <View style={styles.lessonRowLeft}>
-        <View style={[
-          styles.lessonStatusDot,
-          {
-            backgroundColor: lesson.is_completed
-              ? Colors.success
-              : lesson.is_locked
-              ? Colors.gray300
-              : color,
-          },
-        ]}>
-          {lesson.is_completed ? (
-            <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
-              <Path d="M20 6L9 17l-5-5" />
-            </Svg>
-          ) : lesson.is_locked ? (
-            <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-              <Path d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2z" />
-              <Path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </Svg>
-          ) : (
-            <Text style={styles.lessonNumberText}>{lesson.lesson_number}</Text>
-          )}
-        </View>
-        {!isLast && (
-          <View style={[styles.lessonLine, { backgroundColor: lesson.is_completed ? Colors.success : Colors.gray200 }]} />
-        )}
-      </View>
-
-      <View style={[styles.lessonCard, Shadows.sm]}>
-        <LinearGradient
-          colors={
-            lesson.is_locked
-              ? [Colors.gray200, Colors.gray300]
-              : lesson.is_completed
-              ? [Colors.successSurface, Colors.white]
-              : [Colors.white, Colors.gray100]
-          }
-          style={styles.lessonCardGradient}
-        >
-          <View style={styles.lessonCardHeader}>
-            <Text style={styles.lessonEmoji}>{lesson.emoji || typeEmoji[lesson.lesson_type] || '📚'}</Text>
-            <View style={[styles.lessonTypeBadge, { backgroundColor: lesson.is_locked ? Colors.gray300 : color + '15' }]}>
-              <Text style={[styles.lessonTypeText, { color: lesson.is_locked ? Colors.gray500 : color }]}>
-                {typeLabel[lesson.lesson_type] || lesson.lesson_type}
-              </Text>
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <TouchableOpacity onPressIn={handlePressIn} onPressOut={handlePressOut} onPress={onPress} disabled={lesson.is_locked} activeOpacity={0.9}>
+        <View style={styles.lessonRow}>
+          <View style={styles.lessonRowLeft}>
+            <View style={[styles.lessonStatusDot, { backgroundColor: lesson.is_completed ? Colors.success : lesson.is_locked ? Colors.gray300 : color, borderColor: lesson.is_completed ? Colors.success : lesson.is_locked ? Colors.gray300 : color }]}>
+              {lesson.is_completed ? (
+                <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"><Path d="M20 6L9 17l-5-5" /></Svg>
+              ) : lesson.is_locked ? (
+                <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><Rect x="3" y="11" width="18" height="11" rx="2" /><Path d="M7 11V7a5 5 0 0 1 10 0v4" /></Svg>
+              ) : (
+                <Text style={styles.lessonNumberText}>{lesson.lesson_number}</Text>
+              )}
             </View>
+            {!isLast && <View style={[styles.lessonLine, { backgroundColor: lesson.is_completed ? Colors.success : Colors.gray200 }]} />}
           </View>
-          <Text style={[styles.lessonTitle, lesson.is_locked && { color: Colors.gray500 }]}>
-            {lesson.title}
-          </Text>
-          <View style={styles.lessonMeta}>
-            <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={lesson.is_locked ? Colors.gray400 : Colors.gray500} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <Circle cx="12" cy="12" r="10" />
-              <Path d="M12 6v6l4 2" />
-            </Svg>
-            <Text style={[styles.lessonMetaText, lesson.is_locked && { color: Colors.gray400 }]}>
-              {lesson.duration_minutes} min
-            </Text>
+          <View style={[styles.lessonCard, Shadows.md, isActive && { borderColor: color + '40', borderWidth: 2 }]}>
+            <LinearGradient colors={lesson.is_locked ? [Colors.gray200, Colors.gray300] : lesson.is_completed ? [Colors.success + '12', Colors.white] : [Colors.white, Colors.gray100]} style={styles.lessonCardGradient}>
+              <View style={styles.lessonCardHeader}>
+                <View style={styles.lessonEmojiContainer}>
+                  <Text style={styles.lessonEmoji}>{lesson.emoji || typeEmoji[lesson.lesson_type] || '📚'}</Text>
+                </View>
+                <View style={[styles.lessonTypeBadge, { backgroundColor: lesson.is_locked ? Colors.gray300 : isActive ? color + '18' : Colors.success + '18' }]}>
+                  <View style={[styles.lessonTypeDot, { backgroundColor: lesson.is_locked ? Colors.gray400 : isActive ? color : Colors.success }]} />
+                  <Text style={[styles.lessonTypeText, { color: lesson.is_locked ? Colors.gray500 : isActive ? color : Colors.success }]}>{typeLabel[lesson.lesson_type] || lesson.lesson_type}</Text>
+                </View>
+              </View>
+              <Text style={[styles.lessonTitle, lesson.is_locked && { color: Colors.gray400 }]} numberOfLines={1}>{lesson.title}</Text>
+              <View style={styles.lessonMeta}>
+                <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={lesson.is_locked ? Colors.gray400 : color + '80'} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><Circle cx="12" cy="12" r="10" /><Path d="M12 6v6l4 2" /></Svg>
+                <Text style={[styles.lessonMetaText, lesson.is_locked && { color: Colors.gray400 }]}>{lesson.duration_minutes} min</Text>
+                {isActive && (
+                  <View style={styles.playIconContainer}>
+                    <Svg width={16} height={16} viewBox="0 0 24 24" fill={color} stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><Path d="M5 3l14 9-14 9V3z" /></Svg>
+                  </View>
+                )}
+              </View>
+            </LinearGradient>
           </View>
-        </LinearGradient>
-      </View>
-    </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
 export default function UnitScreen() {
-  const { t } = useTranslation();
-  const { activeChild } = useAuth();
+  const { t } = useTranslation(); const { activeChild } = useAuth();
   const params = useLocalSearchParams<{ pathId: string; unitNumber: string }>();
-  const pathId = params.pathId || 'biodiversity';
-  const unitNumber = parseInt(params.unitNumber || '1');
+  const pathId = params.pathId || 'biodiversity'; const unitNumber = parseInt(params.unitNumber || '1');
+  const [unitDetail, setUnitDetail] = useState<UnitDetail | null>(null); const [lessons, setLessons] = useState<LessonItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true); const [error, setError] = useState<string | null>(null);
+  const fadeIn = useRef(new Animated.Value(0)).current; const slideUp = useRef(new Animated.Value(30)).current;
 
-  const [unitDetail, setUnitDetail] = useState<UnitDetail | null>(null);
-  const [lessons, setLessons] = useState<LessonItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const loadData = useCallback(async () => { setIsLoading(true); setError(null); try { const lang = getCurrentLanguage(); const res = await aiEngineClient.get(`/learning/paths/${pathId}/units/${unitNumber}`, { params: { language: lang, child_id: activeChild?.id } }); const data = res.data?.data; setUnitDetail(data); setLessons(data?.lessons || getDefaultLessons(unitNumber)); } catch (err) { setError(t('learn.errorLoadingUnit')); } finally { setIsLoading(false); } }, [pathId, unitNumber, activeChild]);
+  useEffect(() => { loadData(); Animated.parallel([Animated.timing(fadeIn, { toValue: 1, duration: 600, useNativeDriver: true }), Animated.spring(slideUp, { toValue: 0, tension: 60, friction: 8, useNativeDriver: true })]).start(); }, []);
 
-  const fadeIn = useRef(new Animated.Value(0)).current;
-  const slideUp = useRef(new Animated.Value(30)).current;
-
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const lang = getCurrentLanguage();
-      const res = await aiEngineClient.get(`/learning/paths/${pathId}/units/${unitNumber}`, {
-        params: { language: lang, child_id: activeChild?.id },
-      });
-      const data = res.data?.data;
-      setUnitDetail(data);
-      setLessons(data?.lessons || getDefaultLessons(unitNumber));
-    } catch (err) {
-      setError(t('learn.errorLoadingUnit'));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [pathId, unitNumber, activeChild]);
-
-  useEffect(() => {
-    loadData();
-    Animated.parallel([
-      Animated.timing(fadeIn, { toValue: 1, duration: 500, useNativeDriver: true }),
-      Animated.spring(slideUp, { toValue: 0, tension: 60, friction: 8, useNativeDriver: true }),
-    ]).start();
-  }, []);
-
-  const handleLessonPress = useCallback((lesson: LessonItem) => {
-    if (lesson.is_locked) return;
-    router.push({
-      pathname: '/screens/lesson',
-      params: {
-        pathId,
-        unitNumber: String(unitNumber),
-        lessonNumber: String(lesson.lesson_number),
-      },
-    } as any);
-  }, [pathId, unitNumber]);
-
-  const handleTakeTest = useCallback(() => {
-    router.push({
-      pathname: '/screens/unit-test',
-      params: { pathId, unitNumber: String(unitNumber) },
-    } as any);
-  }, [pathId, unitNumber]);
+  const handleLessonPress = useCallback((lesson: LessonItem) => { if (lesson.is_locked) return; router.push({ pathname: '/screens/lesson', params: { pathId, unitNumber: String(unitNumber), lessonNumber: String(lesson.lesson_number) } } as any); }, [pathId, unitNumber]);
+  const handleTakeTest = useCallback(() => { router.push({ pathname: '/screens/unit-test', params: { pathId, unitNumber: String(unitNumber) } } as any); }, [pathId, unitNumber]);
 
   const allLessonsCompleted = lessons.length > 0 && lessons.every((l) => l.is_completed);
-  const pathColor = pathId === 'biodiversity' ? Colors.modules.explorer :
-    pathId === 'climate' ? '#1B6CA8' :
-    pathId === 'disasters' ? '#C0392B' : '#8B5CF6';
+  const pathColor = pathId === 'biodiversity' ? Colors.modules.explorer : pathId === 'climate' ? '#1B6CA8' : pathId === 'disasters' ? '#C0392B' : '#8B5CF6';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          headerTitle: unitDetail?.name || `${t('learn.unit')} ${unitNumber}`,
-          headerBackTitle: t('common.back'),
-        }}
-      />
-
-      <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: TAB_BAR_HEIGHT + BOTTOM_SAFE_AREA + 20 }]}
-        showsVerticalScrollIndicator={false}
-      >
-        {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <LoadingSpinner message={t('learn.loading')} color={pathColor} />
-          </View>
-        ) : error ? (
-          <ErrorDisplay message={error} onRetry={loadData} />
-        ) : !unitDetail ? (
-          <ErrorDisplay message={t('learn.unitNotFound')} onRetry={loadData} />
-        ) : (
+      <Stack.Screen options={{ headerShown: true, headerTitle: unitDetail?.name || `${t('learn.unit')} ${unitNumber}`, headerBackTitle: t('common.back') }} />
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: TAB_BAR_HEIGHT + BOTTOM_SAFE_AREA + 20 }]} showsVerticalScrollIndicator={false}>
+        {isLoading ? (<View style={styles.loadingContainer}><LoadingSpinner message={t('learn.loading')} color={pathColor} /></View>) : error ? (<ErrorDisplay message={error} onRetry={loadData} />) : !unitDetail ? (<ErrorDisplay message={t('learn.unitNotFound')} onRetry={loadData} />) : (
           <Animated.View style={{ opacity: fadeIn, transform: [{ translateY: slideUp }] }}>
-            <LinearGradient colors={[pathColor, pathColor + 'DD']} style={styles.unitHeader}>
-              <Text style={styles.unitHeaderEmoji}>
-                {unitNumber === 1 ? '🌱' : unitNumber === 2 ? '🌿' : unitNumber === 3 ? '🌳' : unitNumber === 4 ? '🦁' : '🌍'}
-              </Text>
+            <LinearGradient colors={[pathColor, pathColor + 'CC']} style={styles.unitHeader}>
+              <View style={styles.unitHeaderGlow} />
+              <Text style={styles.unitHeaderEmoji}>{unitNumber === 1 ? '🌱' : unitNumber === 2 ? '🌿' : unitNumber === 3 ? '🌳' : unitNumber === 4 ? '🦁' : '🌍'}</Text>
               <Text style={styles.unitHeaderTitle}>{t('learn.unit')} {unitDetail.unit_number}</Text>
               <Text style={styles.unitHeaderName}>{unitDetail.name}</Text>
               <Text style={styles.unitHeaderDescription}>{unitDetail.description}</Text>
-
               <View style={styles.unitStatsRow}>
                 <View style={styles.unitStat}>
                   <Text style={styles.unitStatValue}>{unitDetail.lessons_completed}/{unitDetail.total_lessons}</Text>
@@ -268,50 +119,37 @@ export default function UnitScreen() {
                 </View>
                 <View style={styles.unitStatDivider} />
                 <View style={styles.unitStat}>
-                  <Text style={styles.unitStatValue}>
-                    {unitDetail.is_completed && unitDetail.test_passed ? '✅' : unitDetail.is_locked ? '🔒' : '📖'}
-                  </Text>
+                  <Text style={styles.unitStatValue}>{unitDetail.is_completed && unitDetail.test_passed ? '🏆' : unitDetail.is_locked ? '🔒' : '📖'}</Text>
                   <Text style={styles.unitStatLabel}>{t('learn.status')}</Text>
                 </View>
               </View>
             </LinearGradient>
-
             <View style={styles.lessonsSection}>
               <Text style={styles.sectionTitle}>{t('learn.lessons')}</Text>
               {lessons.map((lesson, index) => (
-                <LessonRow
-                  key={lesson.id || index}
-                  lesson={lesson}
-                  color={pathColor}
-                  isLast={index === lessons.length - 1}
-                  onPress={() => handleLessonPress(lesson)}
-                  t={t}
-                />
+                <LessonRow key={lesson.id || index} lesson={lesson} color={pathColor} isLast={index === lessons.length - 1} onPress={() => handleLessonPress(lesson)} t={t} />
               ))}
             </View>
-
             {allLessonsCompleted && !unitDetail.test_passed && (
               <View style={styles.testSection}>
-                <TouchableOpacity onPress={handleTakeTest} activeOpacity={0.85}>
-                  <LinearGradient colors={[Colors.accent, Colors.gradients.quizStart]} style={styles.testButton}>
-                    <Text style={styles.testEmoji}>📝</Text>
-                    <View style={styles.testTextContainer}>
-                      <Text style={styles.testTitle}>{t('learn.unitTest')}</Text>
-                      <Text style={styles.testSubtitle}>{t('learn.unitTestDesc')}</Text>
-                    </View>
-                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-                      <Path d="M5 12h14M12 5l7 7-7 7" />
-                    </Svg>
+                <TouchableOpacity onPress={handleTakeTest} activeOpacity={0.85} style={Shadows.colored(Colors.accent)}>
+                  <LinearGradient colors={[Colors.accent, Colors.gradients.quizStart]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.testButton}>
+                    <View style={styles.testEmojiContainer}><Text style={styles.testEmoji}>📝</Text></View>
+                    <View style={styles.testTextContainer}><Text style={styles.testTitle}>{t('learn.unitTest')}</Text><Text style={styles.testSubtitle}>{t('learn.unitTestDesc')}</Text></View>
+                    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><Path d="M5 12h14M12 5l7 7-7 7" /></Svg>
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
             )}
-
             {unitDetail.is_completed && unitDetail.test_passed && (
               <View style={styles.completedSection}>
-                <LinearGradient colors={[Colors.success, Colors.primary]} style={styles.completedBadge}>
+                <LinearGradient colors={[Colors.success, Colors.primary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.completedBadge}>
                   <Text style={styles.completedEmoji}>🎉</Text>
-                  <Text style={styles.completedText}>{t('learn.unitCompleted')}</Text>
+                  <View>
+                    <Text style={styles.completedText}>{t('learn.unitCompleted')}</Text>
+                    <Text style={styles.completedSubtext}>{t('learn.unitTestDesc')}</Text>
+                  </View>
+                  <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><Path d="M5 12h14M12 5l7 7-7 7" /></Svg>
                 </LinearGradient>
               </View>
             )}
@@ -335,48 +173,46 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.gray100 },
   scrollContent: { flexGrow: 1 },
   loadingContainer: { flex: 1, minHeight: 300, justifyContent: 'center', alignItems: 'center' },
-
-  unitHeader: { padding: Spacing.xl, paddingBottom: Spacing['2xl'], alignItems: 'center', gap: Spacing.xs },
-  unitHeaderEmoji: { fontSize: 48 },
-  unitHeaderTitle: { fontSize: 14, fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1 },
-  unitHeaderName: { fontSize: 24, fontWeight: '800', color: Colors.white, textAlign: 'center' },
+  unitHeader: { padding: Spacing.xl, paddingBottom: Spacing['2xl'], alignItems: 'center', gap: Spacing.xs, position: 'relative', overflow: 'hidden' },
+  unitHeaderGlow: { position: 'absolute', width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(255,255,255,0.06)', top: -60, right: -40 },
+  unitHeaderEmoji: { fontSize: 52 },
+  unitHeaderTitle: { fontSize: 14, fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 2 },
+  unitHeaderName: { fontSize: 26, fontWeight: '900', color: Colors.white, textAlign: 'center', letterSpacing: -0.3 },
   unitHeaderDescription: { fontSize: 14, color: 'rgba(255,255,255,0.8)', textAlign: 'center', lineHeight: 20 },
-
-  unitStatsRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xl, marginTop: Spacing.lg, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: BorderRadius.xl, padding: Spacing.md },
+  unitStatsRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xl, marginTop: Spacing.lg, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: BorderRadius['2xl'], padding: Spacing.md, paddingHorizontal: Spacing.xl },
   unitStat: { flex: 1, alignItems: 'center', gap: 4 },
-  unitStatValue: { fontSize: 18, fontWeight: '800', color: Colors.white },
-  unitStatLabel: { fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 0.3 },
-  unitStatDivider: { width: 1, height: 30, backgroundColor: 'rgba(255,255,255,0.2)' },
-
+  unitStatValue: { fontSize: 20, fontWeight: '900', color: Colors.white },
+  unitStatLabel: { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 0.5 },
+  unitStatDivider: { width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.15)' },
   lessonsSection: { paddingHorizontal: Spacing.base, paddingTop: Spacing.xl },
-  sectionTitle: { fontSize: 18, fontWeight: '800', color: Colors.black, marginBottom: Spacing.md },
-
+  sectionTitle: { fontSize: 20, fontWeight: '800', color: Colors.black, marginBottom: Spacing.md, letterSpacing: -0.3 },
   lessonRow: { flexDirection: 'row', gap: Spacing.md },
-  lessonRowLocked: { opacity: 0.5 },
-  lessonRowLeft: { alignItems: 'center', width: 30 },
-  lessonStatusDot: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', zIndex: 1 },
-  lessonNumberText: { fontSize: 12, fontWeight: '800', color: Colors.white },
-  lessonLine: { width: 3, flex: 1, minHeight: 30, marginTop: -2, marginBottom: -2 },
-
-  lessonCard: { flex: 1, borderRadius: BorderRadius.xl, overflow: 'hidden', marginBottom: Spacing.base },
-  lessonCardGradient: { padding: Spacing.base, gap: Spacing.xs },
+  lessonRowLeft: { alignItems: 'center', width: 32 },
+  lessonStatusDot: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', zIndex: 1, borderWidth: 2 },
+  lessonNumberText: { fontSize: 13, fontWeight: '800', color: Colors.white },
+  lessonLine: { width: 3, flex: 1, minHeight: 28, marginTop: -2, marginBottom: -2, borderRadius: 2 },
+  lessonCard: { flex: 1, borderRadius: BorderRadius['2xl'], overflow: 'hidden', marginBottom: Spacing.base },
+  lessonCardGradient: { padding: Spacing.md, gap: Spacing.xs },
   lessonCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  lessonEmoji: { fontSize: 24 },
-  lessonTypeBadge: { borderRadius: BorderRadius.full, paddingHorizontal: Spacing.sm, paddingVertical: 2 },
+  lessonEmojiContainer: { width: 40, height: 40, borderRadius: BorderRadius.xl, backgroundColor: 'rgba(0,0,0,0.03)', alignItems: 'center', justifyContent: 'center' },
+  lessonEmoji: { fontSize: 22 },
+  lessonTypeBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: BorderRadius.full, paddingHorizontal: Spacing.sm, paddingVertical: 4 },
+  lessonTypeDot: { width: 7, height: 7, borderRadius: 4 },
   lessonTypeText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   lessonTitle: { fontSize: 16, fontWeight: '700', color: Colors.black },
   lessonMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   lessonMetaText: { fontSize: 12, fontWeight: '600', color: Colors.gray500 },
-
+  playIconContainer: { marginLeft: 'auto' },
   testSection: { paddingHorizontal: Spacing.base, paddingTop: Spacing.xl },
-  testButton: { flexDirection: 'row', alignItems: 'center', padding: Spacing.lg, borderRadius: BorderRadius.xl, gap: Spacing.md },
-  testEmoji: { fontSize: 32 },
+  testButton: { flexDirection: 'row', alignItems: 'center', padding: Spacing.lg, borderRadius: BorderRadius['2xl'], gap: Spacing.md },
+  testEmojiContainer: { width: 52, height: 52, borderRadius: BorderRadius.xl, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  testEmoji: { fontSize: 28 },
   testTextContainer: { flex: 1, gap: 4 },
-  testTitle: { fontSize: 16, fontWeight: '800', color: Colors.white },
-  testSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.8)' },
-
+  testTitle: { fontSize: 17, fontWeight: '800', color: Colors.white },
+  testSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.8)', lineHeight: 18 },
   completedSection: { paddingHorizontal: Spacing.base, paddingTop: Spacing.xl, paddingBottom: Spacing.xl },
-  completedBadge: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: Spacing.lg, borderRadius: BorderRadius.xl, gap: Spacing.md },
-  completedEmoji: { fontSize: 28 },
-  completedText: { fontSize: 18, fontWeight: '800', color: Colors.white },
+  completedBadge: { flexDirection: 'row', alignItems: 'center', padding: Spacing.lg, borderRadius: BorderRadius['2xl'], gap: Spacing.md },
+  completedEmoji: { fontSize: 32 },
+  completedText: { fontSize: 17, fontWeight: '800', color: Colors.white },
+  completedSubtext: { fontSize: 12, color: 'rgba(255,255,255,0.7)', fontWeight: '500' },
 });

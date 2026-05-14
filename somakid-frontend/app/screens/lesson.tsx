@@ -1,10 +1,3 @@
-/**
- * SOMAKID AI - Lesson Screen
- * Interactive lesson view with content, exercises, and progress tracking.
- * Supports theory, practice, review, and exam lesson types.
- * Full i18n integration with instant language switching.
- */
-
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, Platform, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,10 +14,11 @@ import Svg, { Path, Circle } from 'react-native-svg';
 
 const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 68;
 const BOTTOM_SAFE_AREA = Platform.OS === 'android' ? 24 : 0;
+const TOTAL_LESSONS_PER_UNIT = 4;
 
 interface LessonData { id: string; path_id: string; unit_number: number; lesson_number: number; title: string; content: string; summary: string; key_points: string[]; vocabulary: { word: string; definition: string }[]; exercises: ExerciseData[]; fun_fact: string; practical_tip: string; emoji: string; estimated_minutes: number; lesson_type: 'theory' | 'practice' | 'review' | 'exam'; difficulty: number; }
-interface ExerciseData { id: string; exercise_type: 'multiple_choice' | 'true_false' | 'fill_blank' | 'open_question' | 'matching' | 'image_identification'; question: string; options: string[]; explanation: string; points: number; order_index: number; }
-interface ExerciseResult { is_correct: boolean; explanation: string; points_earned: number; correct_answer?: any; }
+interface ExerciseData { id: string; exercise_type: 'multiple_choice' | 'true_false' | 'fill_blank' | 'open_question' | 'matching' | 'image_identification'; question: string; options: string[]; correct_answer?: any; explanation: string; points: number; order_index: number; }
+interface ExerciseResult { is_correct: boolean; explanation: string; points_earned: number; correct_answer?: any; correct_answer_index?: number; }
 
 function ExerciseCard({ exercise, onAnswer, isAnswered, result, t }: { exercise: ExerciseData; onAnswer: (answer: any) => void; isAnswered: boolean; result: ExerciseResult | null; t: (key: string) => string; }) {
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
@@ -33,36 +27,32 @@ function ExerciseCard({ exercise, onAnswer, isAnswered, result, t }: { exercise:
   const handleOptionPress = (index: number) => { setSelectedOption(index); Animated.sequence([Animated.timing(animScale, { toValue: 0.95, duration: 100, useNativeDriver: true }), Animated.timing(animScale, { toValue: 1, duration: 100, useNativeDriver: true })]).start(); onAnswer(index); };
   const handleTextSubmit = () => { if (textAnswer.trim()) onAnswer(textAnswer.trim()); };
 
-  const getOptionStyle = (index: number) => {
-    const isSelected = selectedOption === index;
-    const isCorrectOption = result ? index === result.correct_answer : false;
-    const isWrongSelected = result ? (isSelected && !result.is_correct) : false;
-    const base: any = { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md, borderRadius: BorderRadius.lg, borderWidth: 2, borderColor: Colors.gray200, backgroundColor: Colors.gray100 };
-    if (result && isCorrectOption) { base.borderColor = Colors.success; base.backgroundColor = Colors.successSurface; }
-    else if (isWrongSelected) { base.borderColor = Colors.danger; base.backgroundColor = Colors.danger + '10'; }
-    else if (isSelected && !result) { base.borderColor = Colors.primary; base.backgroundColor = Colors.primarySurface; }
-    return base;
-  };
-  const getOptionTextStyle = (index: number) => {
-    const isSelected = selectedOption === index; const isCorrectOption = result ? index === result.correct_answer : false; const isWrongSelected = result ? (isSelected && !result.is_correct) : false;
-    const base: any = { flex: 1, fontSize: 16, fontWeight: '500', color: Colors.gray700 };
-    if (isSelected || isCorrectOption) base.color = isWrongSelected ? Colors.danger : Colors.white;
-    return base;
-  };
-
   return (
     <Animated.View style={localStyles.exerciseCardAnimated}>
       <View style={localStyles.exerciseHeader}><View style={[localStyles.exerciseTypeBadge, { backgroundColor: Colors.primary + '15' }]}><Text style={[localStyles.exerciseTypeText, { color: Colors.primary }]}>{exercise.exercise_type === 'multiple_choice' ? 'QCM' : exercise.exercise_type === 'true_false' ? t('learn.trueFalse') : exercise.exercise_type === 'fill_blank' ? t('learn.fillBlank') : t('learn.openQuestion')}</Text></View><Text style={localStyles.exercisePoints}>+{exercise.points} pts</Text></View>
       <Text style={localStyles.exerciseQuestion}>{exercise.question}</Text>
       {(exercise.exercise_type === 'multiple_choice' || exercise.exercise_type === 'true_false') && (
         <View style={localStyles.optionsContainer}>
-          {(exercise.exercise_type === 'true_false' ? [t('learn.true'), t('learn.false')] : exercise.options).map((option: string, index: number) => (
-            <TouchableOpacity key={index} style={getOptionStyle(index)} onPress={() => handleOptionPress(index)} disabled={isAnswered} activeOpacity={0.8}>
-              {exercise.exercise_type === 'multiple_choice' && (<View style={localStyles.optionLetter}><Text style={localStyles.optionLetterText}>{String.fromCharCode(65 + index)}</Text></View>)}
-              <Text style={getOptionTextStyle(index)}>{option}</Text>
-              {result && index === result.correct_answer && (<Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={Colors.success} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"><Path d="M20 6L9 17l-5-5" /></Svg>)}
-              {result && selectedOption === index && !result.is_correct && (<Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={Colors.danger} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"><Path d="M18 6L6 18M6 6l12 12" /></Svg>)}
-            </TouchableOpacity>))}
+          {(exercise.exercise_type === 'true_false' ? [t('learn.true'), t('learn.false')] : exercise.options).map((option: string, index: number) => {
+            const isSelected = selectedOption === index;
+            const isCorrectOption = result ? index === result.correct_answer_index : false;
+            const isWrongSelected = result ? (isSelected && !result.is_correct) : false;
+            let bgColor: string = Colors.gray100;
+            let borderColor: string = Colors.gray200;
+            let textColor: string = Colors.gray700;
+            let textWeight: '500' | '700' = '500';
+            if (result && isCorrectOption) { bgColor = Colors.primary; borderColor = Colors.primary; textColor = Colors.white; textWeight = '700'; }
+            else if (isWrongSelected) { bgColor = Colors.danger + '15'; borderColor = Colors.danger; textColor = Colors.danger; textWeight = '700'; }
+            else if (isSelected && !result) { bgColor = Colors.primary + '15'; borderColor = Colors.primary; textColor = Colors.primary; textWeight = '700'; }
+            return (
+              <TouchableOpacity key={index} style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: Spacing.md, padding: Spacing.md, borderRadius: BorderRadius.lg, borderWidth: 2, borderColor, backgroundColor: bgColor }} onPress={() => handleOptionPress(index)} disabled={isAnswered} activeOpacity={0.8}>
+                {exercise.exercise_type === 'multiple_choice' && (<View style={localStyles.optionLetter}><Text style={localStyles.optionLetterText}>{String.fromCharCode(65 + index)}</Text></View>)}
+                <Text style={[localStyles.optionText, { color: textColor, fontWeight: textWeight }]}>{option}</Text>
+                {result && isCorrectOption && (<Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={Colors.white} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"><Path d="M20 6L9 17l-5-5" /></Svg>)}
+                {isWrongSelected && (<Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={Colors.danger} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"><Path d="M18 6L6 18M6 6l12 12" /></Svg>)}
+              </TouchableOpacity>
+            );
+          })}
         </View>)}
       {(exercise.exercise_type === 'fill_blank' || exercise.exercise_type === 'open_question') && (
         <View style={localStyles.fillBlankContainer}>
@@ -70,11 +60,17 @@ function ExerciseCard({ exercise, onAnswer, isAnswered, result, t }: { exercise:
           {!isAnswered && (<TouchableOpacity style={!textAnswer.trim() ? localStyles.submitButtonDisabled : localStyles.submitButton} onPress={handleTextSubmit} disabled={!textAnswer.trim()} activeOpacity={0.8}><Text style={localStyles.submitButtonText}>{t('learn.submit')}</Text></TouchableOpacity>)}
         </View>)}
       {result && (
-        <View style={[localStyles.feedbackCard, { backgroundColor: result.is_correct ? Colors.successSurface : Colors.accentSurface }]}>
+        <View style={[localStyles.feedbackCard, { backgroundColor: result.is_correct ? Colors.primary + '10' : Colors.accent + '10' }]}>
           <View style={localStyles.feedbackHeader}>
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={result.is_correct ? Colors.success : Colors.accent} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">{result.is_correct ? (<Path d="M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3" />) : (<Path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 8v4M12 16h.01" />)}</Svg>
-            <Text style={[localStyles.feedbackTitle, { color: result.is_correct ? Colors.success : Colors.accent }]}>{result.is_correct ? t('learn.correct') : t('learn.incorrect')}</Text>
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={result.is_correct ? Colors.primary : Colors.accent} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">{result.is_correct ? (<Path d="M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3" />) : (<Path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 8v4M12 16h.01" />)}</Svg>
+            <Text style={[localStyles.feedbackTitle, { color: result.is_correct ? Colors.primary : Colors.accent }]}>{result.is_correct ? t('learn.correct') : t('learn.incorrect')}</Text>
           </View>
+          {!result.is_correct && result.correct_answer && (
+            <View style={localStyles.correctAnswerRow}>
+              <Text style={localStyles.correctAnswerLabel}>{t('learn.correctAnswer')}: </Text>
+              <Text style={localStyles.correctAnswerText}>{result.correct_answer}</Text>
+            </View>
+          )}
           <Text style={localStyles.feedbackExplanation}>{result.explanation}</Text>
           {result.is_correct && <Text style={localStyles.feedbackPoints}>+{result.points_earned} {t('common.points')}</Text>}
         </View>)}
@@ -85,18 +81,117 @@ function ExerciseCard({ exercise, onAnswer, isAnswered, result, t }: { exercise:
 export default function LessonScreen() {
   const { t } = useTranslation(); const { activeChild } = useAuth();
   const params = useLocalSearchParams<{ pathId: string; unitNumber: string; lessonNumber: string }>();
-  const pathId = params.pathId || 'biodiversity'; const unitNumber = parseInt(params.unitNumber || '1'); const lessonNumber = parseInt(params.lessonNumber || '1');
-  const [lesson, setLesson] = useState<LessonData | null>(null); const [isLoading, setIsLoading] = useState(true); const [error, setError] = useState<string | null>(null);
-  const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0); const [exerciseResults, setExerciseResults] = useState<Map<string, ExerciseResult>>(new Map());
-  const [showContent, setShowContent] = useState(true); const [lessonCompleted, setLessonCompleted] = useState(false);
+  const pathId = params.pathId || 'biodiversity';
+  const unitNumber = parseInt(params.unitNumber || '1');
+  const lessonNumber = parseInt(params.lessonNumber || '1');
+
+  const [lesson, setLesson] = useState<LessonData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
+  const [exerciseResults, setExerciseResults] = useState<Map<string, ExerciseResult>>(new Map());
+  const [showContent, setShowContent] = useState(true);
+  const [lessonCompleted, setLessonCompleted] = useState(false);
+  const [allLessonsInUnitDone, setAllLessonsInUnitDone] = useState(false);
   const fadeIn = useRef(new Animated.Value(0)).current;
 
-  const loadLesson = useCallback(async () => { setIsLoading(true); setError(null); try { const lang = getCurrentLanguage(); const res = await aiEngineClient.post('/learning/lessons/generate', { path_id: pathId, unit_number: unitNumber, lesson_number: lessonNumber, langue: lang, child_age: activeChild?.age || 8, child_level: activeChild?.level || 1 }); setLesson(res.data?.data); setExerciseResults(new Map()); setCurrentExerciseIndex(0); setShowContent(true); setLessonCompleted(false); } catch (err) { setError(t('learn.errorLoadingLesson')); } finally { setIsLoading(false); } }, [pathId, unitNumber, lessonNumber, activeChild]);
-  useEffect(() => { loadLesson(); Animated.timing(fadeIn, { toValue: 1, duration: 500, useNativeDriver: true }).start(); }, []);
+  const loadLesson = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const lang = getCurrentLanguage();
+      const res = await aiEngineClient.post('/learning/lessons/generate', {
+        path_id: pathId,
+        unit_number: unitNumber,
+        lesson_number: lessonNumber,
+        langue: lang,
+        child_age: activeChild?.age || 8,
+        child_level: activeChild?.level || 1,
+      });
+      setLesson(res.data?.data);
+      setExerciseResults(new Map());
+      setCurrentExerciseIndex(0);
+      setShowContent(true);
+      setLessonCompleted(false);
+      setAllLessonsInUnitDone(false);
+    } catch (err) {
+      setError(t('learn.errorLoadingLesson'));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [pathId, unitNumber, lessonNumber, activeChild]);
 
-  const handleExerciseAnswer = useCallback(async (answer: any) => { if (!lesson) return; const exercise = lesson.exercises[currentExerciseIndex]; if (!exercise) return; try { const res = await aiEngineClient.post('/learning/exercises/submit', { exercise_id: exercise.id, lesson_id: lesson.id, answer: String(answer), child_id: activeChild?.id, session_id: `lesson_${lesson.id}` }); const result: ExerciseResult = res.data?.data; setExerciseResults((prev) => { const updated = new Map(prev); updated.set(exercise.id, result); return updated; }); } catch (err) { setExerciseResults((prev) => { const updated = new Map(prev); updated.set(exercise.id, { is_correct: false, explanation: t('learn.errorSubmitting'), points_earned: 0 }); return updated; }); } }, [lesson, currentExerciseIndex, activeChild]);
-  const handleNextExercise = useCallback(() => { if (!lesson) return; if (currentExerciseIndex < lesson.exercises.length - 1) setCurrentExerciseIndex((prev) => prev + 1); else handleCompleteLesson(); }, [lesson, currentExerciseIndex]);
-  const handleCompleteLesson = useCallback(async () => { if (!lesson || lessonCompleted) return; setLessonCompleted(true); const correctExercises = Array.from(exerciseResults.values()).filter((r: ExerciseResult) => r.is_correct).length; const score = lesson.exercises.length > 0 ? Math.round((correctExercises / lesson.exercises.length) * 100) : 100; try { await aiEngineClient.post('/learning/lessons/complete', { lesson_id: lesson.id, unit_id: `unit_${pathId}_${unitNumber}`, path_id: pathId, child_id: activeChild?.id, score, time_spent_seconds: 0 }); } catch (err) {} }, [lesson, exerciseResults, lessonCompleted, pathId, unitNumber, activeChild]);
+  useEffect(() => {
+    loadLesson();
+    Animated.timing(fadeIn, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+  }, []);
+
+  const handleExerciseAnswer = useCallback(async (answer: any) => {
+    if (!lesson) return;
+    const exercise = lesson.exercises[currentExerciseIndex];
+    if (!exercise) return;
+    try {
+      const res = await aiEngineClient.post('/learning/exercises/submit', {
+        exercise_id: exercise.id,
+        lesson_id: lesson.id,
+        answer: String(answer),
+        exercise_type: exercise.exercise_type,
+        correct_answer: exercise.correct_answer,
+        options: exercise.options,
+        explanation: exercise.explanation,
+        points: exercise.points,
+        child_id: activeChild?.id,
+        session_id: `lesson_${lesson.id}`,
+      });
+      const result: ExerciseResult = res.data?.data;
+      setExerciseResults((prev) => { const updated = new Map(prev); updated.set(exercise.id, result); return updated; });
+    } catch (err) {
+      setExerciseResults((prev) => { const updated = new Map(prev); updated.set(exercise.id, { is_correct: false, explanation: t('learn.errorSubmitting'), points_earned: 0 }); return updated; });
+    }
+  }, [lesson, currentExerciseIndex, activeChild]);
+
+  const handleNextExercise = useCallback(() => {
+    if (!lesson) return;
+    if (currentExerciseIndex < lesson.exercises.length - 1) {
+      setCurrentExerciseIndex((prev) => prev + 1);
+    } else {
+      handleCompleteLesson();
+    }
+  }, [lesson, currentExerciseIndex]);
+
+  const handleCompleteLesson = useCallback(async () => {
+    if (!lesson || lessonCompleted) return;
+    setLessonCompleted(true);
+
+    const correctExercises = Array.from(exerciseResults.values()).filter((r: ExerciseResult) => r.is_correct).length;
+    const score = lesson.exercises.length > 0 ? Math.round((correctExercises / lesson.exercises.length) * 100) : 100;
+
+    const lessonKey = `lesson_${pathId}_${unitNumber}_${lessonNumber}`;
+
+    try {
+      const res = await aiEngineClient.post('/learning/lessons/complete', {
+        lesson_id: lessonKey,
+        unit_id: String(unitNumber),
+        path_id: pathId,
+        child_id: activeChild?.id || 'anonymous',
+        score: score,
+        time_spent_seconds: 0,
+      });
+      const data = res.data?.data;
+      setAllLessonsInUnitDone(data?.all_lessons_completed === true);
+    } catch (err) {
+      setAllLessonsInUnitDone(false);
+    }
+  }, [lesson, exerciseResults, lessonCompleted, pathId, unitNumber, lessonNumber, activeChild]);
+
+  const handleGoToNextLesson = useCallback(() => {
+    const nextLessonNumber = lessonNumber + 1;
+    router.replace({
+      pathname: '/screens/lesson',
+      params: { pathId, unitNumber: String(unitNumber), lessonNumber: String(nextLessonNumber) },
+    } as any);
+  }, [pathId, unitNumber, lessonNumber]);
+
   const handleStartExercises = useCallback(() => { setShowContent(false); setCurrentExerciseIndex(0); }, []);
   const handleBackToContent = useCallback(() => { setShowContent(true); }, []);
 
@@ -104,6 +199,7 @@ export default function LessonScreen() {
   const currentResult = currentExercise ? exerciseResults.get(currentExercise.id) : null;
   const isCurrentAnswered = currentResult !== undefined;
   const totalCorrect = Array.from(exerciseResults.values()).filter((r: ExerciseResult) => r.is_correct).length;
+  const isLastLesson = lessonNumber >= TOTAL_LESSONS_PER_UNIT;
 
   if (isLoading) return (<SafeAreaView style={localStyles.container} edges={['top']}><Stack.Screen options={{ headerShown: true, headerTitle: t('learn.lesson'), headerBackTitle: t('common.back') }} /><View style={localStyles.loadingContainer}><LoadingSpinner message={t('learn.loading')} color={Colors.primary} /></View></SafeAreaView>);
   if (error) return (<SafeAreaView style={localStyles.container} edges={['top']}><Stack.Screen options={{ headerShown: true, headerTitle: t('learn.lesson'), headerBackTitle: t('common.back') }} /><ErrorDisplay message={error} onRetry={loadLesson} /></SafeAreaView>);
@@ -115,7 +211,8 @@ export default function LessonScreen() {
       <ScrollView contentContainerStyle={[localStyles.scrollContent, { paddingBottom: TAB_BAR_HEIGHT + BOTTOM_SAFE_AREA + 20 }]} showsVerticalScrollIndicator={false}>
         <Animated.View style={{ opacity: fadeIn }}>
           <LinearGradient colors={[Colors.gradients.heroStart, Colors.gradients.heroMiddle]} style={localStyles.lessonHeader}>
-            <Text style={localStyles.lessonEmoji}>{lesson.emoji}</Text><Text style={localStyles.lessonTitle}>{lesson.title}</Text>
+            <Text style={localStyles.lessonEmoji}>{lesson.emoji}</Text>
+            <Text style={localStyles.lessonTitle}>{lesson.title}</Text>
             <View style={localStyles.lessonMeta}>
               <View style={localStyles.lessonMetaItem}><Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><Circle cx="12" cy="12" r="10" /><Path d="M12 6v6l4 2" /></Svg><Text style={localStyles.lessonMetaText}>{lesson.estimated_minutes} min</Text></View>
               <View style={localStyles.lessonMetaItem}><Text style={localStyles.lessonMetaText}>{'⭐'.repeat(lesson.difficulty)}</Text></View>
@@ -151,10 +248,29 @@ export default function LessonScreen() {
               {currentExerciseIndex < lesson.exercises.length - 1 ? (
                 <TouchableOpacity onPress={handleNextExercise} activeOpacity={0.85}><LinearGradient colors={[Colors.primary, Colors.primaryDark]} style={localStyles.nextExerciseGradient}><Text style={localStyles.nextExerciseText}>{t('learn.nextExercise')}</Text><Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><Path d="M5 12h14M12 5l7 7-7 7" /></Svg></LinearGradient></TouchableOpacity>
               ) : (
-                <TouchableOpacity onPress={handleCompleteLesson} activeOpacity={0.85}><LinearGradient colors={[Colors.success, Colors.primary]} style={localStyles.finishGradient}><Text style={localStyles.finishText}>{t('learn.finishLesson')}</Text><Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><Path d="M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3" /></Svg></LinearGradient></TouchableOpacity>)}
-            </View>)}
+                <TouchableOpacity onPress={handleCompleteLesson} activeOpacity={0.85}><LinearGradient colors={[Colors.success, Colors.primary]} style={localStyles.finishGradient}><Text style={localStyles.finishText}>{t('learn.finishLesson')}</Text><Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><Path d="M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3" /></Svg></LinearGradient></TouchableOpacity>
+              )}
+            </View>
+          )}
           {lessonCompleted && (
-            <View style={localStyles.completedContainer}><LinearGradient colors={[Colors.success, Colors.primary]} style={localStyles.completedCard}><Text style={localStyles.completedEmoji}>🎉</Text><Text style={localStyles.completedTitle}>{t('learn.lessonCompleted')}</Text><Text style={localStyles.completedSubtitle}>{totalCorrect}/{lesson.exercises.length} {t('learn.correctAnswers')}</Text><TouchableOpacity style={localStyles.completedButton} onPress={() => router.back()} activeOpacity={0.85}><Text style={localStyles.completedButtonText}>{t('learn.backToUnits')}</Text></TouchableOpacity></LinearGradient></View>)}
+            <View style={localStyles.completedContainer}>
+              <LinearGradient colors={[Colors.success, Colors.primary]} style={localStyles.completedCard}>
+                <Text style={localStyles.completedEmoji}>🎉</Text>
+                <Text style={localStyles.completedTitle}>{t('learn.lessonCompleted')}</Text>
+                <Text style={localStyles.completedSubtitle}>{totalCorrect}/{lesson.exercises.length} {t('learn.correctAnswers')}</Text>
+                {!isLastLesson && !allLessonsInUnitDone && (
+                  <TouchableOpacity style={localStyles.completedButton} onPress={handleGoToNextLesson} activeOpacity={0.85}>
+                    <Text style={localStyles.completedButtonText}>{t('learn.nextLesson')}</Text>
+                  </TouchableOpacity>
+                )}
+                {(isLastLesson || allLessonsInUnitDone) && (
+                  <TouchableOpacity style={localStyles.completedButton} onPress={() => router.back()} activeOpacity={0.85}>
+                    <Text style={localStyles.completedButtonText}>{t('learn.backToUnits')}</Text>
+                  </TouchableOpacity>
+                )}
+              </LinearGradient>
+            </View>
+          )}
         </Animated.View>
       </ScrollView>
     </SafeAreaView>
@@ -206,6 +322,7 @@ const localStyles = StyleSheet.create({
   optionsContainer: { gap: Spacing.sm },
   optionLetter: { width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(0,0,0,0.06)', alignItems: 'center', justifyContent: 'center' },
   optionLetterText: { fontSize: 14, fontWeight: '800', color: Colors.gray600 },
+  optionText: { flex: 1, fontSize: 16, fontWeight: '500', color: Colors.gray700 },
   fillBlankContainer: { gap: Spacing.md },
   fillBlankInput: { borderWidth: 2, borderColor: Colors.gray200, borderRadius: BorderRadius.lg, padding: Spacing.md, fontSize: 16, color: Colors.black, backgroundColor: Colors.gray100 },
   inputDisabled: { borderWidth: 2, borderColor: Colors.gray200, borderRadius: BorderRadius.lg, padding: Spacing.md, fontSize: 16, color: Colors.gray400, backgroundColor: Colors.gray100, opacity: 0.5 },
@@ -215,8 +332,11 @@ const localStyles = StyleSheet.create({
   feedbackCard: { borderRadius: BorderRadius.lg, padding: Spacing.md, gap: Spacing.sm },
   feedbackHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   feedbackTitle: { fontSize: 16, fontWeight: '800' },
+  correctAnswerRow: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: Colors.white, borderRadius: BorderRadius.md, padding: Spacing.sm },
+  correctAnswerLabel: { fontSize: 14, fontWeight: '700', color: Colors.primary },
+  correctAnswerText: { fontSize: 14, fontWeight: '600', color: Colors.gray700, flex: 1 },
   feedbackExplanation: { fontSize: 15, color: Colors.gray600, lineHeight: 22 },
-  feedbackPoints: { fontSize: 14, fontWeight: '700', color: Colors.success, textAlign: 'right' },
+  feedbackPoints: { fontSize: 14, fontWeight: '700', color: Colors.primary, textAlign: 'right' },
   exerciseNav: { paddingHorizontal: Spacing.base, paddingVertical: Spacing.md },
   nextExerciseGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: Spacing.lg, gap: Spacing.sm, borderRadius: BorderRadius.xl },
   nextExerciseText: { fontSize: 16, fontWeight: '700', color: Colors.white },

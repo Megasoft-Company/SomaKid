@@ -1,26 +1,19 @@
-/**
- * SOMAKID AI - Explorer Screen (Professional UI/UX - Green Theme)
- * Biodiversity explorer with image analysis, voice feedback, and elegant animations.
- * Full i18n integration with instant language switching.
- */
-
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Alert, Animated, Platform,
+  Animated, Platform, Easing,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
-import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { ErrorDisplay } from '../../components/ui/ErrorDisplay';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { takePhoto, pickFromGallery } from '../../utils/media';
 import { formatPoints } from '../../utils/formatting';
 import { aiEngineClient } from '../../services/api/client';
-import { Colors, Typography, Spacing, BorderRadius, Shadows, Animation } from '../../constants/theme';
+import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../constants/theme';
 import { getCurrentLanguage } from '../../i18n';
 import type { ImageAnalysisResult } from '../../types/api.types';
 import Svg, { Path, Circle } from 'react-native-svg';
@@ -58,24 +51,338 @@ async function speakViaTTS(text: string, langue: string = 'fr'): Promise<void> {
   } catch {}
 }
 
-function InfoCard({ title, content, color }: { title: string; content: string; color: string }) {
+function AnalyzingAnimation({ t }: { t: (key: string) => string }) {
+  const spinAnim = useRef(new Animated.Value(0)).current;
+  const scanLineAnim = useRef(new Animated.Value(0)).current;
+  const dotsAnim = useRef([0, 1, 2, 3, 4].map(() => new Animated.Value(0.3))).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(spinAnim, {
+        toValue: 1,
+        duration: 4000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(scanLineAnim, {
+          toValue: 1,
+          duration: 2000,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scanLineAnim, {
+          toValue: 0,
+          duration: 2000,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    dotsAnim.forEach((dot, i) => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(i * 200),
+          Animated.timing(dot, {
+            toValue: 1,
+            duration: 600,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(dot, {
+            toValue: 0.3,
+            duration: 600,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    });
+
+    return () => {
+      spinAnim.stopAnimation();
+      scanLineAnim.stopAnimation();
+      dotsAnim.forEach(dot => dot.stopAnimation());
+    };
+  }, []);
+
+  const spin = spinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  const scanLine = scanLineAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-55, 55],
+  });
+
   return (
-    <View style={[styles.infoCard, { borderLeftColor: color }]}>
-      <Text style={[styles.infoCardTitle, { color }]}>{title}</Text>
-      <Text style={styles.infoCardContent}>{content}</Text>
+    <View style={az.stage}>
+      <View style={az.orbContainer}>
+        <View style={az.orbOuterRing} />
+        <Animated.View style={[az.orbSpinRing, { transform: [{ rotate: spin }] }]}>
+          <View style={[az.orbDot, { top: -4, left: '50%', marginLeft: -4 }]} />
+          <View style={[az.orbDot, { bottom: -4, left: '50%', marginLeft: -4 }]} />
+        </Animated.View>
+        <Animated.View style={[az.orbSpinRing, { transform: [{ rotate: spin }, { scale: 0.7 }] }]}>
+          <View style={[az.orbDotSmall, { top: -3, right: 12 }]} />
+          <View style={[az.orbDotSmall, { bottom: -3, left: 12 }]} />
+        </Animated.View>
+        <View style={az.orbCore}>
+          <Svg width={48} height={48} viewBox="0 0 24 24" fill="none" stroke={Colors.primary} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+            <Path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7z" />
+            <Path d="M12 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" />
+          </Svg>
+        </View>
+        <Animated.View style={[az.scanLine, { transform: [{ translateY: scanLine }] }]}>
+          <LinearGradient
+            colors={['transparent', Colors.primary + '60', Colors.primary + 'C0', Colors.primary + '60', 'transparent']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={az.scanLineGradient}
+          />
+        </Animated.View>
+      </View>
+      <Text style={az.title}>{t('explorer.analyzing')}</Text>
+      <View style={az.dotsRow}>
+        {dotsAnim.map((dot, i) => (
+          <Animated.View
+            key={i}
+            style={[
+              az.dot,
+              {
+                opacity: dot,
+                transform: [{ scale: dot }],
+              },
+            ]}
+          />
+        ))}
+      </View>
+      <Text style={az.subtitle}>{t('explorer.takePhoto')}</Text>
     </View>
   );
 }
 
+const az = StyleSheet.create({
+  stage: {
+    borderRadius: BorderRadius['2xl'],
+    backgroundColor: Colors.white,
+    padding: Spacing['2xl'],
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 280,
+    ...Shadows.lg,
+  },
+  orbContainer: {
+    width: 140,
+    height: 140,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.xl,
+    position: 'relative',
+  },
+  orbOuterRing: {
+    position: 'absolute',
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    borderWidth: 2,
+    borderColor: Colors.primary + '20',
+  },
+  orbSpinRing: {
+    position: 'absolute',
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+  },
+  orbDot: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.primary,
+  },
+  orbDotSmall: {
+    position: 'absolute',
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: Colors.primary + '80',
+  },
+  orbCore: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.primarySurface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: Colors.primary + '30',
+  },
+  scanLine: {
+    position: 'absolute',
+    width: 130,
+    height: 3,
+  },
+  scanLineGradient: {
+    flex: 1,
+    borderRadius: 2,
+  },
+  title: {
+    fontSize: Typography.sizes.lg,
+    fontWeight: Typography.weights.extrabold,
+    color: Colors.black,
+    marginBottom: Spacing.md,
+    textAlign: 'center',
+  },
+  dotsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: Spacing.sm,
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.primary,
+  },
+  subtitle: {
+    fontSize: Typography.sizes.sm,
+    color: Colors.gray500,
+    textAlign: 'center',
+  },
+});
+
+function SpeakingAnimation({ t }: { t: (key: string) => string }) {
+  const waves = useRef([0, 1, 2, 3, 4].map(() => new Animated.Value(0.4))).current;
+
+  useEffect(() => {
+    waves.forEach((wave, i) => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(i * 150),
+          Animated.timing(wave, {
+            toValue: 1,
+            duration: 600,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(wave, {
+            toValue: 0.4,
+            duration: 600,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    });
+    return () => waves.forEach(wave => wave.stopAnimation());
+  }, []);
+
+  return (
+    <View style={sz.stage}>
+      <View style={sz.waveContainer}>
+        {waves.map((wave, i) => (
+          <Animated.View
+            key={i}
+            style={[
+              sz.wave,
+              {
+                opacity: wave,
+                transform: [{ scaleY: wave }],
+                backgroundColor: i === 2 ? Colors.primary : Colors.primaryLight + '80',
+              },
+            ]}
+          />
+        ))}
+      </View>
+      <Text style={sz.title}>{t('explorer.speaking')}</Text>
+    </View>
+  );
+}
+
+const sz = StyleSheet.create({
+  stage: {
+    borderRadius: BorderRadius['2xl'],
+    backgroundColor: Colors.successSurface,
+    padding: Spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 90,
+    marginBottom: Spacing.md,
+  },
+  waveContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    gap: 6,
+    height: 44,
+    marginBottom: Spacing.sm,
+  },
+  wave: {
+    width: 5,
+    height: 36,
+    borderRadius: 3,
+  },
+  title: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: Typography.weights.bold,
+    color: Colors.primaryDark,
+  },
+});
+
+function InfoCard({ title, content, color, index }: { title: string; content: string; color: string; index: number }) {
+  const fadeIn = useRef(new Animated.Value(0)).current;
+  const slideRight = useRef(new Animated.Value(-20)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeIn, {
+        toValue: 1,
+        duration: 400,
+        delay: index * 80,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideRight, {
+        toValue: 0,
+        tension: 80,
+        friction: 10,
+        delay: index * 80,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View style={[
+      styles.infoCard,
+      { borderLeftColor: color, opacity: fadeIn, transform: [{ translateX: slideRight }] },
+    ]}>
+      <Text style={[styles.infoCardTitle, { color }]}>{title}</Text>
+      <Text style={styles.infoCardContent}>{content}</Text>
+    </Animated.View>
+  );
+}
+
 function ResultContent({ result, t }: { result: ImageAnalysisResult; t: (key: string) => string }) {
+  const cards = [
+    { title: t('explorer.about'), content: result.childDescription, color: Colors.primary, show: !!result.childDescription },
+    { title: t('explorer.roleInNature'), content: result.ecologicalRole, color: Colors.secondary, show: !!result.ecologicalRole },
+    { title: t('explorer.didYouKnowTitle'), content: result.funFact, color: Colors.modules.quiz, show: !!result.funFact },
+    { title: t('explorer.threats'), content: result.threats, color: Colors.earth, show: !!result.threats },
+    { title: t('explorer.whatYouCanDo'), content: result.childAction, color: Colors.modules.chat, show: !!result.childAction },
+    { title: t('explorer.safetyAdvice'), content: result.safetyAdvice, color: Colors.danger, show: !!result.safetyAdvice },
+  ].filter(card => card.show);
+
   return (
     <View style={styles.resultContent}>
-      <InfoCard title={t('explorer.about')} content={result.childDescription} color={Colors.primary} />
-      <InfoCard title={t('explorer.roleInNature')} content={result.ecologicalRole} color={Colors.secondary} />
-      <InfoCard title={t('explorer.didYouKnowTitle')} content={result.funFact} color={Colors.modules.quiz} />
-      {result.threats && <InfoCard title={t('explorer.threats')} content={result.threats} color={Colors.earth} />}
-      <InfoCard title={t('explorer.whatYouCanDo')} content={result.childAction} color={Colors.modules.chat} />
-      {result.safetyAdvice && <InfoCard title={t('explorer.safetyAdvice')} content={result.safetyAdvice} color={Colors.danger} />}
+      {cards.map((card, index) => (
+        <InfoCard key={index} title={card.title} content={card.content!} color={card.color} index={index} />
+      ))}
     </View>
   );
 }
@@ -88,17 +395,6 @@ export default function ExplorerScreen() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { activeChild } = useAuth();
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-
-  const startPulse = useCallback(() => {
-    pulseAnim.setValue(1);
-    Animated.loop(Animated.sequence([
-      Animated.timing(pulseAnim, { toValue: 1.04, duration: Animation.slow, useNativeDriver: true }),
-      Animated.timing(pulseAnim, { toValue: 1, duration: Animation.slow, useNativeDriver: true }),
-    ])).start();
-  }, [pulseAnim]);
-
-  const stopPulse = useCallback(() => { pulseAnim.stopAnimation(); pulseAnim.setValue(1); }, [pulseAnim]);
 
   const clearResult = useCallback(() => { setResult(null); setImageUri(null); setError(null); }, []);
 
@@ -107,9 +403,7 @@ export default function ExplorerScreen() {
     setIsAnalyzing(true);
     setError(null);
     setResult(null);
-    startPulse();
 
-    // Récupérer la langue courante pour l'envoyer à l'API
     const currentLang = getCurrentLanguage();
 
     try {
@@ -144,7 +438,6 @@ export default function ExplorerScreen() {
 
       setResult(mappedResult);
 
-      // Lecture vocale du résultat dans la langue courante
       const species = mappedResult.species || '';
       const desc = mappedResult.childDescription || '';
       const role = mappedResult.ecologicalRole || '';
@@ -160,10 +453,9 @@ export default function ExplorerScreen() {
     } catch {
       setError(t('explorer.analysisError'));
     } finally {
-      stopPulse();
       setIsAnalyzing(false);
     }
-  }, [activeChild, startPulse, stopPulse, t]);
+  }, [activeChild, t]);
 
   const handleTakePhoto = useCallback(async () => { const uri = await takePhoto(); if (uri) handleImageAnalysis(uri); }, [handleImageAnalysis]);
   const handlePickGallery = useCallback(async () => { const uri = await pickFromGallery(); if (uri) handleImageAnalysis(uri); }, [handleImageAnalysis]);
@@ -175,13 +467,14 @@ export default function ExplorerScreen() {
         showsVerticalScrollIndicator={false}
         bounces={true}
       >
-        {/* ── Header ── */}
         <LinearGradient colors={[Colors.gradients.heroStart, Colors.gradients.heroMiddle]} style={styles.header}>
           <View style={styles.headerContent}>
-            <Svg width={32} height={32} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <Path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7z" />
-              <Path d="M12 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" />
-            </Svg>
+            <View style={styles.headerIconContainer}>
+              <Svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <Path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7z" />
+                <Path d="M12 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" />
+              </Svg>
+            </View>
             <View>
               <Text style={styles.headerTitle}>{t('explorer.title')}</Text>
               <Text style={styles.headerSubtitle}>{t('explorer.subtitle')}</Text>
@@ -190,24 +483,10 @@ export default function ExplorerScreen() {
         </LinearGradient>
 
         <View style={styles.mainArea}>
-          {/* ── Analyse en cours ── */}
-          {isAnalyzing && (
-            <Animated.View style={[styles.loadingZone, { transform: [{ scale: pulseAnim }] }]}>
-              <LoadingSpinner message={t('explorer.analyzing')} color={Colors.primary} />
-            </Animated.View>
-          )}
-
-          {/* ── SOMA parle ── */}
-          {isSpeaking && (
-            <Animated.View style={[styles.speakingZone]}>
-              <LoadingSpinner message={t('explorer.speaking')} color={Colors.success} />
-            </Animated.View>
-          )}
-
-          {/* ── Erreur ── */}
+          {isAnalyzing && <AnalyzingAnimation t={t} />}
+          {isSpeaking && <SpeakingAnimation t={t} />}
           {error && !isAnalyzing && <ErrorDisplay message={error} onRetry={clearResult} />}
 
-          {/* ── Résultat ── */}
           {result && !isAnalyzing && !error && (
             <View style={styles.resultContainer}>
               <View style={styles.resultHeader}>
@@ -236,7 +515,6 @@ export default function ExplorerScreen() {
             </View>
           )}
 
-          {/* ── État vide ── */}
           {!isAnalyzing && !error && !result && (
             <EmptyState
               emoji="📸"
@@ -246,7 +524,6 @@ export default function ExplorerScreen() {
           )}
         </View>
 
-        {/* ── Boutons d'action ── */}
         {!isAnalyzing && (
           <View style={styles.actionRow}>
             <TouchableOpacity 
@@ -277,7 +554,6 @@ export default function ExplorerScreen() {
           </View>
         )}
 
-        {/* ── Conseils d'exploration ── */}
         {!result && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('explorer.explorationTips')}</Text>
@@ -314,21 +590,12 @@ export default function ExplorerScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.gray100 },
   scroll: { flexGrow: 1 },
-
-  // ── Header ──
   header: { padding: Spacing.xl, paddingTop: Spacing.lg },
   headerContent: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  headerIconContainer: { width: 48, height: 48, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: Typography.sizes['2xl'], fontWeight: Typography.weights.extrabold, color: Colors.white, marginBottom: 4 },
   headerSubtitle: { fontSize: Typography.sizes.md, color: 'rgba(255,255,255,0.8)' },
-
-  // ── Main Area ──
   mainArea: { margin: Spacing.base, minHeight: 250 },
-
-  // ── Loading ──
-  loadingZone: { borderRadius: BorderRadius['2xl'], overflow: 'hidden', minHeight: 230, justifyContent: 'center' },
-  speakingZone: { borderRadius: BorderRadius['2xl'], backgroundColor: Colors.successSurface, minHeight: 80, justifyContent: 'center', alignItems: 'center', marginBottom: Spacing.md },
-
-  // ── Result ──
   resultContainer: { backgroundColor: Colors.white, borderRadius: BorderRadius['2xl'], padding: Spacing.xl, ...Shadows.md },
   resultHeader: { flexDirection: 'row', gap: Spacing.md, marginBottom: Spacing.lg },
   resultImageContainer: { width: 120, height: 120, borderRadius: BorderRadius.xl, overflow: 'hidden' },
@@ -345,13 +612,9 @@ const styles = StyleSheet.create({
   infoCardContent: { fontSize: Typography.sizes.md, color: Colors.gray600, lineHeight: 22 },
   retryButton: { borderRadius: BorderRadius.xl, padding: Spacing.lg, alignItems: 'center', marginTop: Spacing.lg },
   retryButtonText: { fontSize: Typography.sizes.base, fontWeight: Typography.weights.bold, color: Colors.white },
-
-  // ── Actions ──
   actionRow: { flexDirection: 'row', gap: Spacing.md, marginHorizontal: Spacing.base, marginTop: Spacing.md },
   actionButton: { flex: 1, borderRadius: BorderRadius.xl, padding: Spacing.lg, alignItems: 'center', gap: Spacing.sm },
   actionText: { fontSize: Typography.sizes.md, fontWeight: Typography.weights.bold, color: Colors.white },
-
-  // ── Tips ──
   section: { paddingHorizontal: Spacing.base, paddingTop: Spacing.xl, marginBottom: Spacing.xl },
   sectionTitle: { fontSize: Typography.sizes.lg, fontWeight: Typography.weights.extrabold, color: Colors.black, marginBottom: Spacing.md },
   tipItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.white, borderRadius: BorderRadius.lg, padding: Spacing.md, marginBottom: Spacing.sm, gap: Spacing.md, ...Shadows.sm },

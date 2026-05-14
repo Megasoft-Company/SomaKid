@@ -1,10 +1,4 @@
-﻿"""
-SOMAKID AI Engine - Learning Service
-Orchestrates the structured learning paths, units, lessons, and exercises.
-Inspired by Duolingo's gamified progression system.
-"""
-
-from typing import Optional, Dict, Any, List
+﻿from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone
 import uuid
 
@@ -57,17 +51,23 @@ class LearningService:
         }
         return all_units.get(path_id, [])
 
-    def get_unit_detail(self, path_id: str, unit_number: int, language: str = "fr") -> Optional[Dict[str, Any]]:
+    def get_unit_detail(self, path_id: str, unit_number: int, language: str = "fr", child_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         units = self.get_units_for_path(path_id, language)
         for unit in units:
             if unit["unit_number"] == unit_number:
-                unit["lessons"] = self._get_default_lessons(unit_number, language)
+                unit["lessons"] = self._get_lessons_with_progress(unit_number, language, child_id, path_id)
+                if child_id:
+                    unit_progress = self._load_unit_progress(child_id, path_id, unit_number)
+                    lessons_completed = unit_progress.get("lessons_completed", 0)
+                    unit["lessons_completed"] = lessons_completed
+                    unit["is_completed"] = self.check_unit_completion(child_id, path_id, unit_number)
+                    unit["test_passed"] = self.check_test_passed(child_id, path_id, unit_number)
                 return unit
         return None
 
     def get_child_unit_progress(self, child_id: str, path_id: str, unit_number: int) -> Dict[str, Any]:
         try:
-            progress = self.memory.load_progress(f"learning:{child_id}:{path_id}:unit:{unit_number}")
+            progress = self._load_unit_progress(child_id, path_id, unit_number)
             return {"lessons_completed": progress.get("lessons_completed", 0), "total_lessons": progress.get("total_lessons", 4), "test_passed": progress.get("test_passed", False), "best_score": progress.get("best_score", 0)}
         except Exception:
             return {"lessons_completed": 0, "total_lessons": 4, "test_passed": False, "best_score": 0}
@@ -86,25 +86,49 @@ class LearningService:
     def mark_lesson_completed(self, child_id: str, path_id: str, unit_id: str, lesson_id: str, score: int = 100, time_spent_seconds: int = 0) -> Dict[str, Any]:
         progress_key = f"learning:{child_id}:{path_id}"
         unit_progress_key = f"learning:{child_id}:{path_id}:unit:{unit_id}"
+
         try:
             progress = self.memory.load_progress(progress_key)
-            unit_progress = self.memory.load_progress(unit_progress_key)
         except Exception:
             progress = {}
+        try:
+            unit_progress = self.memory.load_progress(unit_progress_key)
+        except Exception:
             unit_progress = {}
-        progress["lessons_completed"] = progress.get("lessons_completed", 0) + 1
+
+        completed_lessons: List[str] = unit_progress.get("completed_lesson_ids", [])
+        if lesson_id not in completed_lessons:
+            completed_lessons.append(lesson_id)
+            unit_progress["completed_lesson_ids"] = completed_lessons
+            unit_progress["lessons_completed"] = len(completed_lessons)
+            progress["lessons_completed"] = progress.get("lessons_completed", 0) + 1
+
+        unit_progress["best_score"] = max(unit_progress.get("best_score", 0), score)
+        unit_progress["total_lessons"] = 4
         progress["points"] = progress.get("points", 0) + score
         progress["last_activity"] = datetime.now(timezone.utc).isoformat()
-        unit_progress["lessons_completed"] = unit_progress.get("lessons_completed", 0) + 1
-        unit_progress["best_score"] = max(unit_progress.get("best_score", 0), score)
+
         self.memory.save_progress(progress_key, progress)
         self.memory.save_progress(unit_progress_key, unit_progress)
-        return {"lesson_completed": True, "score": score, "total_lessons_completed": progress["lessons_completed"], "unit_lessons_completed": unit_progress["lessons_completed"]}
+
+        lessons_completed_count = unit_progress["lessons_completed"]
+        total_lessons = unit_progress["total_lessons"]
+        all_done = lessons_completed_count >= total_lessons
+
+        return {
+            "lesson_completed": True,
+            "score": score,
+            "total_lessons_completed": progress["lessons_completed"],
+            "unit_lessons_completed": lessons_completed_count,
+            "all_lessons_completed": all_done,
+        }
 
     def check_all_lessons_completed(self, child_id: str, path_id: str, unit_id: str) -> bool:
         try:
-            unit_progress = self.memory.load_progress(f"learning:{child_id}:{path_id}:unit:{unit_id}")
-            return unit_progress.get("lessons_completed", 0) >= unit_progress.get("total_lessons", 4)
+            unit_progress = self._load_unit_progress(child_id, path_id, unit_id)
+            lessons_completed = unit_progress.get("lessons_completed", 0)
+            total_lessons = unit_progress.get("total_lessons", 4)
+            return lessons_completed >= total_lessons
         except Exception:
             return False
 
@@ -113,7 +137,7 @@ class LearningService:
 
     def check_test_passed(self, child_id: str, path_id: str, unit_number: int) -> bool:
         try:
-            progress = self.memory.load_progress(f"learning:{child_id}:{path_id}:unit:{unit_number}")
+            progress = self._load_unit_progress(child_id, path_id, str(unit_number))
             return progress.get("test_passed", False)
         except Exception:
             return False
@@ -148,8 +172,51 @@ class LearningService:
         translations = {"fr": fr, "en": en, "ln": ln, "sw": sw}
         return translations.get(language, fr)
 
+    def _load_unit_progress(self, child_id: str, path_id: str, unit_id) -> Dict[str, Any]:
+        try:
+            return self.memory.load_progress(f"learning:{child_id}:{path_id}:unit:{unit_id}")
+        except Exception:
+            return {}
+
+    def _get_lessons_with_progress(self, unit_number: int, language: str, child_id: Optional[str], path_id: str) -> List[Dict[str, Any]]:
+        default_lessons = self._get_default_lessons(unit_number, language)
+
+        if not child_id:
+            return default_lessons
+
+        unit_progress = self._load_unit_progress(child_id, path_id, unit_number)
+        completed_ids: List[str] = unit_progress.get("completed_lesson_ids", [])
+        lessons_completed_count: int = unit_progress.get("lessons_completed", 0)
+
+        result = []
+        for i, lesson in enumerate(default_lessons):
+            lesson_number = lesson["lesson_number"]
+            lesson_key = f"lesson_{path_id}_{unit_number}_{lesson_number}"
+
+            is_completed = (lesson_key in completed_ids) or (i < lessons_completed_count)
+
+            if i == 0:
+                is_locked = False
+            else:
+                prev_lesson_number = default_lessons[i - 1]["lesson_number"]
+                prev_key = f"lesson_{path_id}_{unit_number}_{prev_lesson_number}"
+                prev_completed = (prev_key in completed_ids) or ((i - 1) < lessons_completed_count)
+                is_locked = not prev_completed
+
+            lesson["is_completed"] = is_completed
+            lesson["is_locked"] = is_locked
+            lesson["id"] = lesson_key
+            result.append(lesson)
+
+        return result
+
     def _get_default_lessons(self, unit_number: int, language: str = "fr") -> List[Dict[str, Any]]:
-        return [{"lesson_number": 1, "title": self._t("Découverte", "Discovery", "Découverte", "Ugunduzi", language), "lesson_type": "theory", "emoji": "📖", "duration_minutes": 5, "is_completed": False, "is_locked": False}, {"lesson_number": 2, "title": self._t("Application", "Application", "Application", "Matumizi", language), "lesson_type": "practice", "emoji": "✍️", "duration_minutes": 8, "is_completed": False, "is_locked": True}, {"lesson_number": 3, "title": self._t("Exploration", "Exploration", "Exploration", "Uchunguzi", language), "lesson_type": "theory", "emoji": "🔍", "duration_minutes": 6, "is_completed": False, "is_locked": True}, {"lesson_number": 4, "title": self._t("Révision", "Review", "Révision", "Mapitio", language), "lesson_type": "review", "emoji": "🔄", "duration_minutes": 10, "is_completed": False, "is_locked": True}]
+        return [
+            {"lesson_number": 1, "title": self._t("Découverte", "Discovery", "Découverte", "Ugunduzi", language), "lesson_type": "theory", "emoji": "📖", "duration_minutes": 5, "is_completed": False, "is_locked": False},
+            {"lesson_number": 2, "title": self._t("Application", "Application", "Application", "Matumizi", language), "lesson_type": "practice", "emoji": "✍️", "duration_minutes": 8, "is_completed": False, "is_locked": True},
+            {"lesson_number": 3, "title": self._t("Exploration", "Exploration", "Exploration", "Uchunguzi", language), "lesson_type": "theory", "emoji": "🔍", "duration_minutes": 6, "is_completed": False, "is_locked": True},
+            {"lesson_number": 4, "title": self._t("Révision", "Review", "Révision", "Mapitio", language), "lesson_type": "review", "emoji": "🔄", "duration_minutes": 10, "is_completed": False, "is_locked": True},
+        ]
 
     def _get_fallback_lesson(self, path_id: str, unit_number: int, lesson_number: int, language: str) -> Dict[str, Any]:
         return {"title": self._t("Leçon", "Lesson", "Leçon", "Somo", language), "content": self._t("Contenu de la leçon en cours de chargement...", "Lesson content loading...", "Contenu ya leçon ezali ko charger...", "Maudhui ya somo yanapakia...", language), "exercises": []}

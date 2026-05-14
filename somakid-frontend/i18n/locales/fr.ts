@@ -266,6 +266,7 @@ export default {
     keyPoints: 'Points Clés',
     didYouKnow: 'Le saviez-vous ?',
     practicalTip: 'Conseil Pratique',
+    correctAnswer: 'Réponse correcte',
     nextExercise: 'Exercice suivant',
     finishLesson: 'Terminer la leçon',
     lessonCompleted: 'Leçon Terminée !',
