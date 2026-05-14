@@ -288,5 +288,6 @@ export default {
     review: 'Mapitio',
     exam: 'Mtihani',
     finish: 'Maliza',
+    nextLesson: 'Somo linalofuata',
   },
 };
