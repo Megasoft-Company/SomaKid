@@ -267,6 +267,7 @@ export default {
     keyPoints: 'Ba Points Clés',
     didYouKnow: 'Oyebaki?',
     practicalTip: 'Conseil Pratique',
+    correctAnswer: 'Eyano ya solo',
     nextExercise: 'Exercice suivant',
     finishLesson: 'Kosilisa leçon',
     lessonCompleted: 'Leçon Esilami!',

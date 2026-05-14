@@ -266,6 +266,7 @@ export default {
     keyPoints: 'Key Points',
     didYouKnow: 'Did you know?',
     practicalTip: 'Practical Tip',
+    correctAnswer: 'Correct answer',
     nextExercise: 'Next exercise',
     finishLesson: 'Finish lesson',
     lessonCompleted: 'Lesson Completed!',
