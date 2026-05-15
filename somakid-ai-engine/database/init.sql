@@ -1,8 +1,5 @@
 -- =============================================================================
 -- SOMAKID AI Engine - Database Initialization Script
--- Creates tables for users, children, discoveries, quiz results, messages,
--- learning paths, units, lessons, exercises, and child progression.
--- Inspired by Duolingo's gamified learning structure.
 -- =============================================================================
 
 -- Enable UUID extension
