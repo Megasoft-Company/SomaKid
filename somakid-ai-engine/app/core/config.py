@@ -19,10 +19,10 @@ def _find_env_file() -> Path | None:
     """
     Remonte l'arborescence depuis ce fichier (core/config.py) pour trouver .env.
     Structure attendue :  somakid-ai-engine/
-                              .env                 ← cherché ici
+                              .env  
                               app/
                                 core/
-                                  config.py        ← ce fichier
+                                  config.py    
     """
     current = Path(__file__).resolve().parent   # .../app/core
     for _ in range(6):                          # remonte jusqu'à 6 niveaux
