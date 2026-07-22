@@ -15,6 +15,7 @@ from ..core.config import settings
 from ..core.exceptions import (
     ValidationException,
     AIServiceException,
+    RateLimitException,
     UnsupportedLanguageException,
 )
 from ..core.security import sanitize_child_text, validate_supported_language, validate_child_age
@@ -27,6 +28,7 @@ from ..utils.prompts import (
 )
 from ..utils.helpers import generate_short_id
 from .gemini_client import GeminiClient
+from .groq_client import GroqClient
 from ..repositories.memory_repository import MemoryRepository
 
 logger = get_logger(__name__)
@@ -84,10 +86,12 @@ class ChatService:
         self,
         gemini_client: GeminiClient,
         memory_repo: MemoryRepository,
+        groq_client: Optional[GroqClient] = None,
     ):
         self.gemini = gemini_client
+        self.groq = groq_client
         self.memory = memory_repo
-        logger.info("chat_service_initialized")
+        logger.info("chat_service_initialized", groq_fallback_enabled=self.groq is not None)
 
     async def send_message(
         self,
@@ -141,9 +145,18 @@ class ChatService:
         try:
             raw_response = await self.gemini.generate_text(prompt=full_prompt)
             response_data = self.gemini.extract_json_from_response(raw_response)
-        except AIServiceException:
-            logger.warning("chat_generation_failed_using_fallback")
-            response_data = get_fallback_chat_response(language, "chat_error")
+        except (AIServiceException, RateLimitException) as gemini_error:
+            if self.groq:
+                try:
+                    logger.warning("gemini_failed_trying_groq_fallback", error=str(gemini_error))
+                    raw_response = await self.groq.generate_text(prompt=full_prompt)
+                    response_data = self.gemini.extract_json_from_response(raw_response)
+                except Exception as groq_error:
+                    logger.warning("groq_fallback_failed_using_static_fallback", error=str(groq_error))
+                    response_data = get_fallback_chat_response(language, "chat_error")
+            else:
+                logger.warning("chat_generation_failed_using_fallback", error=str(gemini_error))
+                response_data = get_fallback_chat_response(language, "chat_error")
 
         soma_response = self._build_response(response_data)
         updated_history = self._update_history(

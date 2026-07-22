@@ -20,7 +20,7 @@ from ..core.logging_config import get_logger, log_performance, log_error
 
 logger = get_logger(__name__)
 
-TEXT_MODEL = "gemini-2.5-flash-lite"
+TEXT_MODEL = "gemini-3.1-flash-lite"
 AUDIO_MODEL = "gemini-2.0-flash-exp"
 
 
@@ -48,10 +48,10 @@ class GeminiClient:
                 top_p=self.generation_config.get("top_p", 0.95),
                 top_k=self.generation_config.get("top_k", 40),
             )
-            self.text_model = GenerativeModel(model_name=TEXT_MODEL, generation_config=generation_config_obj)
-            self.vision_model = GenerativeModel(model_name=TEXT_MODEL, generation_config=generation_config_obj)
+            self.text_model = GenerativeModel(model_name=self.model_name, generation_config=generation_config_obj)
+            self.vision_model = GenerativeModel(model_name=self.model_name, generation_config=generation_config_obj)
             self.audio_model = GenerativeModel(model_name=AUDIO_MODEL)
-            logger.info("gemini_client_initialized", model=TEXT_MODEL, audio_model=AUDIO_MODEL)
+            logger.info("gemini_client_initialized", model=self.model_name, audio_model=AUDIO_MODEL)
         except Exception as e:
             logger.error("gemini_client_init_failed", error=str(e))
             raise AIServiceException(f"Failed to initialize Gemini client: {str(e)}")

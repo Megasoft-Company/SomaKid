@@ -130,7 +130,7 @@ class Settings(BaseSettings):
         description="Google Gemini API key",
     )
     GEMINI_MODEL: str = Field(
-        default="gemini-2.5-flash-lite",
+        default="gemini-3.1-flash-lite",
         description="Gemini model to use",
     )
     GEMINI_MAX_TOKENS: int = Field(
