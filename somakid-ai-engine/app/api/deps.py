@@ -10,6 +10,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from ..core.config import settings
 from ..core.security import bearer_security, verify_jwt_token, validate_api_key, limiter
 from ..services.gemini_client import GeminiClient
+from ..services.groq_client import GroqClient
 from ..services.vision_service import VisionService
 from ..services.quiz_service import QuizService
 from ..services.chat_service import ChatService
@@ -21,6 +22,7 @@ from ..repositories.knowledge_repository import KnowledgeRepository
 
 
 _gemini_client: Optional[GeminiClient] = None
+_groq_client: Optional[GroqClient] = None
 _vision_service: Optional[VisionService] = None
 _quiz_service: Optional[QuizService] = None
 _chat_service: Optional[ChatService] = None
@@ -52,6 +54,13 @@ def get_gemini_client() -> GeminiClient:
     return _gemini_client
 
 
+def get_groq_client() -> Optional[GroqClient]:
+    global _groq_client
+    if _groq_client is None and settings.GROQ_API_KEY:
+        _groq_client = GroqClient(api_key=settings.GROQ_API_KEY)
+    return _groq_client
+
+
 def get_vision_service(
     memory_repo: MemoryRepository = Depends(get_memory_repository),
     knowledge_repo: KnowledgeRepository = Depends(get_knowledge_repository),
@@ -75,10 +84,11 @@ def get_quiz_service(
 def get_chat_service(
     gemini_client: GeminiClient = Depends(get_gemini_client),
     memory_repo: MemoryRepository = Depends(get_memory_repository),
+    groq_client: Optional[GroqClient] = Depends(get_groq_client),
 ) -> ChatService:
     global _chat_service
     if _chat_service is None:
-        _chat_service = ChatService(gemini_client=gemini_client, memory_repo=memory_repo)
+        _chat_service = ChatService(gemini_client=gemini_client, memory_repo=memory_repo, groq_client=groq_client)
     return _chat_service
 
 
