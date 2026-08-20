@@ -5,3 +5,4 @@
 
 export { ModuleCard } from './ModuleCard';
 export { StatCard } from './StatCard';
+export { CourseCard } from './CourseCard';
