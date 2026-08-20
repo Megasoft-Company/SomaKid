@@ -191,6 +191,22 @@ export default function HomeScreen() {
       title: t('home.talkWithSoma'), description: t('home.talkWithSomaDesc'), color: Colors.modules.chat, route: '/(tabs)/chat' as const,
       icon: (<Svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><Path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" /></Svg>),
     },
+    {
+      title: t('courses.entryTitle'), description: t('courses.entryDesc'), color: Colors.modules.courses, route: '/screens/courses' as const,
+      icon: (<Svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><Path d="M22 10v6M2 10l10-5 10 5-10 5-10-5z" /><Path d="M6 12v5c0 1.66 2.69 3 6 3s6-1.34 6-3v-5" /></Svg>),
+    },
+    {
+      title: t('library.entryTitle'), description: t('library.entryDesc'), color: Colors.modules.library, route: '/screens/library' as const,
+      icon: (<Svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><Path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><Path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></Svg>),
+    },
+    {
+      title: t('institutions.entryTitle'), description: t('institutions.entryDesc'), color: Colors.modules.institutions, route: '/screens/institutions' as const,
+      icon: (<Svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><Path d="M3 21h18" /><Path d="M5 21V7l7-4 7 4v14" /><Path d="M9 21v-6h6v6" /></Svg>),
+    },
+    {
+      title: t('myLearning.entryTitle'), description: t('myLearning.entryDesc'), color: Colors.modules.myLearning, route: '/screens/my-learning' as const,
+      icon: (<Svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><Path d="M12 2l2.9 6.4 6.9.9-5 4.9 1.2 6.9-6-3.3-6 3.3 1.2-6.9-5-4.9 6.9-.9z" /></Svg>),
+    },
   ];
 
   return (

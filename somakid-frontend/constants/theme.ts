@@ -61,6 +61,10 @@ export const Colors = {
     academy: '#1B6CA8',
     quiz: '#E8921A',
     chat: '#8B5CF6',
+    courses: '#1B6CA8',
+    library: '#C0722A',
+    institutions: '#C0392B',
+    myLearning: '#F4A228',
   },
 
   // Level colors
