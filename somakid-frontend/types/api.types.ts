@@ -36,7 +36,7 @@ export interface QuizSubjectDefinition { id: string; name: string; emoji: string
 export interface QuizSessionStats { sessionId: string; quizCompleted: number; correctAnswers: number; accuracy: number; totalPoints: number; }
 
 export interface ChatMessage { id: string; role: MessageRole; content: string; timestamp: Date; pointsEarned?: number; badgeUnlocked?: string; activitySuggestion?: string; }
-export interface ChatSendRequest { message: string; language: Language; sessionId: string; history?: Array<{ role: string; content: string }>; }
+export interface ChatSendRequest { message: string; language: Language; sessionId: string; history?: Array<{ role: string; content: string }>; domain?: 'environment' | 'health'; }
 export interface ChatResponse { response: string; activitySuggestion: string | null; pointsEarned: number; badgeUnlocked: string | null; followUpQuestion: string | null; }
 export interface ChatSessionResponse { sessionId: string; childId: string | null; }
 

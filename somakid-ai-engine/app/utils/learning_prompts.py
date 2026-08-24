@@ -7,6 +7,12 @@ All content is strictly focused on climate, biodiversity, environment, and Afric
 
 from typing import Optional, List, Dict, Any
 
+from .health_prompts import get_health_path_context
+
+_HEALTH_IDENTITY_LINE = {
+    "fr": "Tu es SOMAKID, un educateur africain de sante expert en hygiene, nutrition et prevention pour enfants. Tu ne poses jamais de diagnostic medical et ne prescris jamais de traitement.",
+    "en": "You are SOMAKID, an African health educator expert in hygiene, nutrition and prevention for children. You never give a medical diagnosis or prescribe treatment.",
+}
 
 _LESSON_PATH_CONTEXT = {
     "biodiversity": {
@@ -155,16 +161,20 @@ _UNIQUE_EXERCISE_INSTRUCTION = {
 }
 
 
-def get_exercise_generation_prompt(topic: str = "", exercise_type: str = "multiple_choice", count: int = 4, language: str = "fr", difficulty: int = 1) -> str:
+def get_exercise_generation_prompt(topic: str = "", exercise_type: str = "multiple_choice", count: int = 4, language: str = "fr", difficulty: int = 1, domain: str = "environment") -> str:
     type_instructions = _EXERCISE_TYPE_INSTRUCTIONS.get(exercise_type, _EXERCISE_TYPE_INSTRUCTIONS["multiple_choice"])
     type_instruction = type_instructions.get(language, type_instructions["fr"])
     lang_instruction = _LESSON_LANG_INSTRUCTIONS.get(language, _LESSON_LANG_INSTRUCTIONS["fr"])
     unique_instruction = _UNIQUE_EXERCISE_INSTRUCTION.get(language, _UNIQUE_EXERCISE_INSTRUCTION["fr"])
     difficulty_labels = {"fr": {1: "très facile", 2: "facile", 3: "moyen", 4: "difficile", 5: "expert"}, "en": {1: "very easy", 2: "easy", 3: "medium", 4: "hard", 5: "expert"}, "ln": {1: "facile mingi", 2: "facile", 3: "moyen", 4: "difficile", 5: "expert"}, "sw": {1: "rahisi sana", 2: "rahisi", 3: "wastani", 4: "ngumu", 5: "mtaalamu"}}
     diff_label = difficulty_labels.get(language, difficulty_labels["fr"]).get(difficulty, "moyen")
+    identity_block = (
+        f"{_HEALTH_IDENTITY_LINE['fr']}\n{_HEALTH_IDENTITY_LINE['en']}"
+        if domain == "health" else
+        "Tu es SOMAKID, un enseignant africain expert en climat, biodiversité et environnement.\nYou are SOMAKID, an expert African teacher in climate, biodiversity and environment."
+    )
     return f"""
-Tu es SOMAKID, un enseignant africain expert en climat, biodiversité et environnement.
-You are SOMAKID, an expert African teacher in climate, biodiversity and environment.
+{identity_block}
 
 {lang_instruction}
 
@@ -213,15 +223,23 @@ _UNIQUE_TEST_INSTRUCTION = {
 }
 
 
-def get_unit_test_prompt(path_id: str = "biodiversity", unit_number: int = 1, language: str = "fr", question_count: int = 10) -> str:
-    path_context = _LESSON_PATH_CONTEXT.get(path_id, _LESSON_PATH_CONTEXT["biodiversity"])
-    lang_context = path_context.get(language, path_context["fr"])
-    path_name = lang_context["name"]; unit_name = lang_context["units"].get(unit_number, f"Unit {unit_number}")
+def get_unit_test_prompt(path_id: str = "biodiversity", unit_number: int = 1, language: str = "fr", question_count: int = 10, domain: str = "environment") -> str:
+    if domain == "health":
+        lang_context = get_health_path_context(path_id, language)
+        path_name = lang_context["name"]; unit_name = lang_context["units"].get(unit_number, f"Unit {unit_number}")
+    else:
+        path_context = _LESSON_PATH_CONTEXT.get(path_id, _LESSON_PATH_CONTEXT["biodiversity"])
+        lang_context = path_context.get(language, path_context["fr"])
+        path_name = lang_context["name"]; unit_name = lang_context["units"].get(unit_number, f"Unit {unit_number}")
     lang_instruction = _UNIT_TEST_LANG_INSTRUCTIONS.get(language, _UNIT_TEST_LANG_INSTRUCTIONS["fr"])
     unique_instruction = _UNIQUE_TEST_INSTRUCTION.get(language, _UNIQUE_TEST_INSTRUCTION["fr"])
+    identity_block = (
+        f"{_HEALTH_IDENTITY_LINE['fr']}\n{_HEALTH_IDENTITY_LINE['en']}"
+        if domain == "health" else
+        "Tu es SOMAKID, un enseignant africain expert en climat, biodiversité et environnement.\nYou are SOMAKID, an expert African teacher in climate, biodiversity and environment."
+    )
     return f"""
-Tu es SOMAKID, un enseignant africain expert en climat, biodiversité et environnement.
-You are SOMAKID, an expert African teacher in climate, biodiversity and environment.
+{identity_block}
 
 {lang_instruction}
 

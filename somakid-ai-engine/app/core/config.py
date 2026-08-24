@@ -523,6 +523,46 @@ AVAILABLE_BADGES: list[dict] = [
         "description": "50 conversations with SOMA!",
         "condition": {"type": "chat_messages", "value": 50},
     },
+    {
+        "id": "hygiene_champion",
+        "name": "Champion de l'Hygiene",
+        "emoji": "🥇",
+        "color": "#2AA9B8",
+        "description": "You completed 5 hygiene lessons!",
+        "condition": {"type": "health_lessons_completed", "value": 5},
+    },
+    {
+        "id": "health_protector",
+        "name": "Protecteur de la Sante",
+        "emoji": "🥇",
+        "color": "#5B7FDB",
+        "description": "You completed 10 health lessons!",
+        "condition": {"type": "health_lessons_completed", "value": 10},
+    },
+    {
+        "id": "nutrition_expert",
+        "name": "Expert Nutrition",
+        "emoji": "🥇",
+        "color": "#E4A62B",
+        "description": "You passed 3 nutrition quizzes!",
+        "condition": {"type": "health_quiz_completed", "value": 3},
+    },
+    {
+        "id": "prevention_hero",
+        "name": "Heros de la Prevention",
+        "emoji": "🥇",
+        "color": "#D9534F",
+        "description": "7-day hygiene streak!",
+        "condition": {"type": "hygiene_streak_days", "value": 7},
+    },
+    {
+        "id": "health_ambassador",
+        "name": "Ambassadeur Sante",
+        "emoji": "🥇",
+        "color": "#8B5CF6",
+        "description": "You earned 300 health points!",
+        "condition": {"type": "health_points", "value": 300},
+    },
 ]
 
 MODULE_COLORS: dict[str, str] = {
@@ -530,4 +570,5 @@ MODULE_COLORS: dict[str, str] = {
     "academy": "#1B6CA8",
     "quiz": "#E8921A",
     "chat": "#8B5CF6",
+    "health": "#2AA9B8",
 }

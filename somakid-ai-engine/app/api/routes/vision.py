@@ -98,10 +98,12 @@ async def analyze_image(
     image: UploadFile = File(...),
     language: str = Form(default="fr"),
     child_age: int = Form(default=8, ge=3, le=15),
+    domain: str = Form(default="environment", description="'environment' (species) or 'health' (food/hygiene/first-aid objects)"),
     vision_service: VisionService = Depends(get_vision_service),
 ):
     """
-    Analyze an image for biodiversity identification.
+    Analyze an image for biodiversity identification (domain='environment') or
+    health-related object recognition (domain='health').
     The response is generated in the language specified by the 'language' parameter.
     """
     if not image.content_type or not image.content_type.startswith("image/"):
@@ -118,12 +120,20 @@ async def analyze_image(
             image_bytes=image_bytes,
             language=language,
             child_age=child_age,
+            domain=domain,
         )
-        soma_text = (
-            f"{result.espece}. {result.description_enfant} "
-            f"Son role: {result.role_ecologique}. "
-            f"Le savais-tu? {result.fait_amusant}. {result.action_enfant}"
-        )
+        if domain == "health":
+            soma_text = (
+                f"{result.espece}. {result.description_enfant} "
+                f"{result.role_ecologique}. "
+                f"Le savais-tu? {result.fait_amusant}. {result.action_enfant}"
+            )
+        else:
+            soma_text = (
+                f"{result.espece}. {result.description_enfant} "
+                f"Son role: {result.role_ecologique}. "
+                f"Le savais-tu? {result.fait_amusant}. {result.action_enfant}"
+            )
         audio_mp3 = await _text_to_speech(soma_text, language)
         data = result.model_dump()
         data["audio_base64"] = base64.b64encode(audio_mp3).decode("utf-8")

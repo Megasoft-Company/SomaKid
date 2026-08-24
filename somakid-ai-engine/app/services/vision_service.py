@@ -53,9 +53,41 @@ _DEFAULT_TEXTS = {
     },
 }
 
+# Multilingual default texts for _normalize_result (health domain)
+_HEALTH_DEFAULT_TEXTS = {
+    "fr": {
+        "description_enfant": "Belle decouverte pour prendre soin de ta sante !",
+        "role_ecologique": "Utile pour rester en bonne sante au quotidien.",
+        "fait_amusant": "Prendre soin de soi est un vrai super-pouvoir !",
+        "action_enfant": "Adopte ce bon geste de sante chaque jour.",
+    },
+    "en": {
+        "description_enfant": "A great discovery for taking care of your health!",
+        "role_ecologique": "Useful for staying healthy day to day.",
+        "fait_amusant": "Taking care of yourself is a real super-power!",
+        "action_enfant": "Adopt this healthy habit every day.",
+    },
+    "ln": {
+        "description_enfant": "Decouverte ya kitoko po na kobatela sante na yo !",
+        "role_ecologique": "Ezali na ntina po na kozala malamu mokolo na mokolo.",
+        "fait_amusant": "Kobatela nzoto na yo ezali super-pouvoir ya solo !",
+        "action_enfant": "Sala geste oyo ya sante mokolo na mokolo.",
+    },
+    "sw": {
+        "description_enfant": "Ugunduzi mzuri wa kutunza afya yako!",
+        "role_ecologique": "Ni muhimu kubaki na afya njema kila siku.",
+        "fait_amusant": "Kujitunza ni nguvu ya kweli!",
+        "action_enfant": "Chukua tabia hii ya afya kila siku.",
+    },
+}
+
 
 class VisionService:
-    VALID_CATEGORIES = {"plant", "animal", "insect", "fungus", "other"}
+    VALID_CATEGORIES = {
+        "plant", "animal", "insect", "fungus", "other",
+        # Health domain categories
+        "food", "hygiene_product", "first_aid", "medicine",
+    }
     VALID_DANGER_LEVELS = {"none", "low", "moderate"}
 
     def __init__(self, memory_repo: MemoryRepository, knowledge_repo: KnowledgeRepository):
@@ -70,8 +102,9 @@ class VisionService:
         child_age: int = 8,
         session_id: Optional[str] = None,
         child_id: Optional[str] = None,
+        domain: str = "environment",
     ) -> AnalyseImageResult:
-        """Analyze an image for biodiversity species identification."""
+        """Analyze an image for biodiversity species identification (or health object recognition when domain='health')."""
         self._validate_inputs(image_bytes, language, child_age)
         processed_image = self._preprocess_image(image_bytes)
 
@@ -90,17 +123,17 @@ class VisionService:
                     top_k=40,
                 ),
             )
-            prompt = get_image_analysis_prompt(language=language, child_age=child_age)
+            prompt = get_image_analysis_prompt(language=language, child_age=child_age, domain=domain)
             image_part = {"mime_type": "image/jpeg", "data": processed_image}
             response = await asyncio.to_thread(
                 model.generate_content, [prompt, image_part]
             )
-            result_data = self._parse_json(response.text, language)
+            result_data = self._parse_json(response.text, language, domain)
         except Exception:
             logger.warning("gemini_vision_failed_using_fallback")
-            result_data = get_fallback_analysis_response(language, "analysis_error")
+            result_data = get_fallback_analysis_response(language, "analysis_error", domain=domain)
 
-        result = self._normalize_result(result_data, language, child_age)
+        result = self._normalize_result(result_data, language, child_age, domain)
 
         if session_id and result.espece:
             await self._record_discovery(session_id, child_id, result)
@@ -160,7 +193,7 @@ class VisionService:
         except Exception as e:
             raise ImageProcessingException(f"Preprocessing failed: {str(e)}")
 
-    def _parse_json(self, text: str, language: str = "fr") -> Dict[str, Any]:
+    def _parse_json(self, text: str, language: str = "fr", domain: str = "environment") -> Dict[str, Any]:
         """Extract JSON from AI response text, with fallback in the correct language."""
         import json
 
@@ -193,16 +226,18 @@ class VisionService:
 
         # Fallback in the correct language
         logger.warning("vision_json_parse_failed_using_fallback")
-        return get_fallback_analysis_response(language, "parse_error")
+        return get_fallback_analysis_response(language, "parse_error", domain=domain)
 
     def _normalize_result(
         self,
         raw_data: Dict[str, Any],
         language: str,
         child_age: int,
+        domain: str = "environment",
     ) -> AnalyseImageResult:
         """Normalize raw AI response data into a structured result with language-aware defaults."""
-        default_texts = _DEFAULT_TEXTS.get(language, _DEFAULT_TEXTS["fr"])
+        texts_source = _HEALTH_DEFAULT_TEXTS if domain == "health" else _DEFAULT_TEXTS
+        default_texts = texts_source.get(language, texts_source["fr"])
 
         category = raw_data.get("categorie", raw_data.get("category", "other"))
         if category not in self.VALID_CATEGORIES:

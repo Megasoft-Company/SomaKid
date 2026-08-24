@@ -26,6 +26,7 @@ from .api.routes import chat as chat_routes
 from .api.routes import voice as voice_routes
 from .api.routes import progression as progression_routes
 from .api.routes import learning as learning_routes
+from .api.routes import health_challenges as health_challenges_routes
 
 
 # =============================================================================
@@ -226,6 +227,7 @@ app.include_router(chat_routes.router, prefix="/api/v1/chat", tags=["Chat - SOMA
 app.include_router(voice_routes.router, prefix="/api/v1/voice", tags=["Voice - TTS & STT"])
 app.include_router(progression_routes.router, prefix="/api/v1/progression", tags=["Progression - Tracking"])
 app.include_router(learning_routes.router, prefix="/api/v1/learning", tags=["Learning - Duolingo-Style"])
+app.include_router(health_challenges_routes.router, prefix="/api/v1/sante/challenges", tags=["Sante - Challenges & Progress"])
 
 
 # =============================================================================

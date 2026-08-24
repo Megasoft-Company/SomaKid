@@ -510,6 +510,7 @@ export default function UnitScreen() {
   // ---------------------------------------------------------------------------
   const allLessonsCompleted = lessons.length > 0 && lessons.every((l) => l.is_completed);
 
+  const ENVIRONMENT_PATH_IDS = ['biodiversity', 'climate', 'disasters', 'behaviors'];
   const pathColor =
     pathId === 'biodiversity'
       ? Colors.modules?.explorer || '#4CAF50'
@@ -517,6 +518,10 @@ export default function UnitScreen() {
       ? '#1B6CA8'
       : pathId === 'disasters'
       ? '#C0392B'
+      : pathId === 'behaviors'
+      ? '#8B5CF6'
+      : !ENVIRONMENT_PATH_IDS.includes(pathId)
+      ? Colors.modules?.health || '#2AA9B8'
       : '#8B5CF6';
 
   // ---------------------------------------------------------------------------

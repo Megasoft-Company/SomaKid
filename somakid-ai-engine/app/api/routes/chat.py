@@ -133,6 +133,7 @@ class ChatMessageRequest(BaseModel):
     session_id: Optional[str] = Field(default=None)
     historique: Optional[List[dict]] = Field(default=[])
     history: Optional[List[dict]] = Field(default=[])
+    domain: str = Field(default="environment", description="'environment' or 'health' — selects the SOMA persona")
 
 
 class VoiceChatRequest(BaseModel):
@@ -333,6 +334,7 @@ async def send_message(request: Request, body: ChatMessageRequest, chat_service:
             language=body.langue,
             session_id=session_id,
             conversation_history=history,
+            domain=body.domain,
         )
         asyncio.create_task(asyncio.to_thread(
             memory_repo.save_progress,

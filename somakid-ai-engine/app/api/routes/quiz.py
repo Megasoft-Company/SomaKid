@@ -370,9 +370,10 @@ async def submit_quiz_answer(
 @router.get("/subjects")
 async def get_quiz_subjects(
     language: str = Query(default="fr"),
+    domain: str = Query(default="environment"),
     quiz_service: QuizService = Depends(get_quiz_service),
 ):
-    subjects = quiz_service.get_available_subjects(language=language)
+    subjects = quiz_service.get_available_subjects(language=language, domain=domain)
     return JSONResponse(content={"success": True, "data": subjects})
 
 

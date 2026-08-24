@@ -17,8 +17,10 @@ interface ChatState {
   isSending: boolean;
   error: string | null;
   isSpeaking: boolean;
+  domain: 'environment' | 'health';
 
   initializeSession: (childId?: string) => Promise<void>;
+  setDomain: (domain: 'environment' | 'health') => void;
   sendMessage: (content: string, language?: Language) => Promise<void>;
   sendImage: (imageUri: string, language?: Language, childAge?: number) => Promise<void>;
   loadHistory: () => Promise<void>;
@@ -94,6 +96,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isSending: false,
   error: null,
   isSpeaking: false,
+  domain: 'environment',
+
+  setDomain: (domain: 'environment' | 'health') => set({ domain }),
 
   initializeSession: async (childId?: string) => {
     set({ isLoading: true, error: null });
@@ -106,7 +111,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   sendMessage: async (content: string, language: Language = 'fr') => {
-    const { sessionId, messages } = get();
+    const { sessionId, messages, domain } = get();
     if (!content.trim()) return;
 
     const userMessage: ChatMessageEx = { id: `msg_${Date.now()}_user`, role: 'user', content: content.trim(), timestamp: new Date() };
@@ -114,7 +119,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     try {
       const history = messages.slice(-6).map((m) => ({ role: m.role, content: m.content }));
-      const result = await ChatService.sendMessage({ message: content.trim(), language, sessionId, history });
+      const result = await ChatService.sendMessage({ message: content.trim(), language, sessionId, history, domain });
       const chatResponse = result.response as ChatResponse & Record<string, any>;
 
       const mainText = (chatResponse.response || chatResponse.reponse || '').trim();

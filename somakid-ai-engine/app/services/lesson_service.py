@@ -17,6 +17,7 @@ from ..utils.learning_prompts import (
     get_exercise_generation_prompt,
     get_unit_test_prompt,
 )
+from ..utils.health_prompts import HEALTH_CATEGORY_META, get_health_lesson_generation_prompt
 from .gemini_client import GeminiClient
 from ..repositories.memory_repository import MemoryRepository
 
@@ -39,9 +40,18 @@ class LessonService:
         self.memory = memory_repo
         logger.info("lesson_service_initialized")
 
-    async def generate_lesson(self, path_id: str, unit_number: int, lesson_number: int, language: str = "fr", child_age: int = 8, child_level: int = 1) -> Dict[str, Any]:
-        logger.info("generating_lesson", path=path_id, unit=unit_number, lesson=lesson_number, language=language)
-        prompt = get_lesson_generation_prompt(path_id=path_id, unit_number=unit_number, lesson_number=lesson_number, language=language, child_age=child_age, child_level=child_level)
+    def _resolve_domain(self, path_id: str, domain: Optional[str] = None) -> str:
+        if domain:
+            return domain
+        return "health" if path_id in HEALTH_CATEGORY_META else "environment"
+
+    async def generate_lesson(self, path_id: str, unit_number: int, lesson_number: int, language: str = "fr", child_age: int = 8, child_level: int = 1, domain: Optional[str] = None) -> Dict[str, Any]:
+        resolved_domain = self._resolve_domain(path_id, domain)
+        logger.info("generating_lesson", path=path_id, unit=unit_number, lesson=lesson_number, language=language, domain=resolved_domain)
+        if resolved_domain == "health":
+            prompt = get_health_lesson_generation_prompt(path_id=path_id, unit_number=unit_number, lesson_number=lesson_number, language=language, child_age=child_age, child_level=child_level)
+        else:
+            prompt = get_lesson_generation_prompt(path_id=path_id, unit_number=unit_number, lesson_number=lesson_number, language=language, child_age=child_age, child_level=child_level)
         try:
             raw_response = await self.gemini.generate_text(prompt=prompt)
             lesson_data = self.gemini.extract_json_from_response(raw_response)
@@ -52,10 +62,10 @@ class LessonService:
         logger.info("lesson_generated", path=path_id, unit=unit_number, lesson=lesson_number, exercise_count=len(lesson.get("exercises", [])))
         return lesson
 
-    async def generate_exercises(self, topic: str, exercise_type: str, count: int = 4, language: str = "fr", difficulty: int = 1) -> List[Dict[str, Any]]:
+    async def generate_exercises(self, topic: str, exercise_type: str, count: int = 4, language: str = "fr", difficulty: int = 1, domain: str = "environment") -> List[Dict[str, Any]]:
         if exercise_type not in EXERCISE_TYPES:
             raise ValidationException(f"Invalid exercise type: {exercise_type}")
-        prompt = get_exercise_generation_prompt(topic=topic, exercise_type=exercise_type, count=count, language=language, difficulty=difficulty)
+        prompt = get_exercise_generation_prompt(topic=topic, exercise_type=exercise_type, count=count, language=language, difficulty=difficulty, domain=domain)
         try:
             raw_response = await self.gemini.generate_text(prompt=prompt)
             exercises_data = self.gemini.extract_json_from_response(raw_response)
@@ -65,9 +75,10 @@ class LessonService:
         exercises = exercises_data.get("exercises", [])
         return self._normalize_exercises(exercises, exercise_type)
 
-    async def generate_unit_test(self, path_id: str, unit_number: int, language: str = "fr", question_count: int = 10) -> Dict[str, Any]:
-        logger.info("generating_unit_test", path=path_id, unit=unit_number, language=language)
-        prompt = get_unit_test_prompt(path_id=path_id, unit_number=unit_number, language=language, question_count=question_count)
+    async def generate_unit_test(self, path_id: str, unit_number: int, language: str = "fr", question_count: int = 10, domain: Optional[str] = None) -> Dict[str, Any]:
+        resolved_domain = self._resolve_domain(path_id, domain)
+        logger.info("generating_unit_test", path=path_id, unit=unit_number, language=language, domain=resolved_domain)
+        prompt = get_unit_test_prompt(path_id=path_id, unit_number=unit_number, language=language, question_count=question_count, domain=resolved_domain)
         try:
             raw_response = await self.gemini.generate_text(prompt=prompt)
             test_data = self.gemini.extract_json_from_response(raw_response)
