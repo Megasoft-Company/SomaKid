@@ -6,6 +6,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: somakid-frontend
     steps:
       - name: 🏗 Checkout repository
         uses: actions/checkout@v4
@@ -15,6 +18,7 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
+          cache-dependency-path: somakid-frontend/package-lock.json
 
       - name: 🏗 Setup Java
         uses: actions/setup-java@v3
@@ -48,4 +52,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: somakid-release-aab
-          path: ./*.aab
+          path: somakid-frontend/*.aab
