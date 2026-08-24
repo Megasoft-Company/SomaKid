@@ -31,6 +31,7 @@ class GenerateLessonRequest(BaseModel):
     langue: str = Field(default="fr", description="Language for lesson content")
     child_age: int = Field(default=8, ge=3, le=15, description="Child's age")
     child_level: int = Field(default=1, ge=1, le=5, description="Child's level")
+    domain: Optional[str] = Field(default=None, description="'environment' or 'health' — auto-detected from path_id when omitted")
 
 
 class GenerateExercisesRequest(BaseModel):
@@ -46,6 +47,7 @@ class GenerateUnitTestRequest(BaseModel):
     unit_number: int = Field(ge=1, le=5, description="Unit number")
     langue: str = Field(default="fr", description="Language")
     question_count: int = Field(default=10, ge=5, le=20, description="Number of questions")
+    domain: Optional[str] = Field(default=None, description="'environment' or 'health' — auto-detected from path_id when omitted")
 
 
 class SubmitExerciseRequest(BaseModel):
@@ -80,8 +82,8 @@ class LessonCompleteRequest(BaseModel):
 
 
 @router.get("/paths")
-async def get_learning_paths(language: str = Query(default="fr"), child_id: Optional[str] = Query(default=None), learning_service: LearningService = Depends(get_learning_service)):
-    paths = learning_service.get_learning_paths(language=language)
+async def get_learning_paths(language: str = Query(default="fr"), domain: str = Query(default="environment"), child_id: Optional[str] = Query(default=None), learning_service: LearningService = Depends(get_learning_service)):
+    paths = learning_service.get_learning_paths(language=language, domain=domain)
     if child_id:
         for path in paths:
             progress = learning_service.get_child_path_progress(child_id, path["slug"])
@@ -125,7 +127,7 @@ async def get_unit_detail(path_id: str, unit_number: int, language: str = Query(
 @limiter.limit("20/minute")
 async def generate_lesson(request: Request, body: GenerateLessonRequest, lesson_service: LessonService = Depends(get_lesson_service), memory_repo: MemoryRepository = Depends(get_memory_repository)):
     try:
-        lesson = await lesson_service.generate_lesson(path_id=body.path_id, unit_number=body.unit_number, lesson_number=body.lesson_number, language=body.langue, child_age=body.child_age, child_level=body.child_level)
+        lesson = await lesson_service.generate_lesson(path_id=body.path_id, unit_number=body.unit_number, lesson_number=body.lesson_number, language=body.langue, child_age=body.child_age, child_level=body.child_level, domain=body.domain)
         memory_repo.save_progress(f"lesson:{lesson.get('id')}", lesson)
         return JSONResponse(content={"success": True, "data": lesson})
     except ValidationException as e:
@@ -205,7 +207,7 @@ async def get_exercise_types(language: str = Query(default="fr"), lesson_service
 @limiter.limit("10/minute")
 async def generate_unit_test(request: Request, body: GenerateUnitTestRequest, lesson_service: LessonService = Depends(get_lesson_service), memory_repo: MemoryRepository = Depends(get_memory_repository)):
     try:
-        test = await lesson_service.generate_unit_test(path_id=body.path_id, unit_number=body.unit_number, language=body.langue, question_count=body.question_count)
+        test = await lesson_service.generate_unit_test(path_id=body.path_id, unit_number=body.unit_number, language=body.langue, question_count=body.question_count, domain=body.domain)
         memory_repo.save_progress(f"unit_test:{test.get('id')}", test)
         return JSONResponse(content={"success": True, "data": test})
     except ValidationException as e:
@@ -243,8 +245,8 @@ async def submit_unit_test(body: SubmitUnitTestRequest, lesson_service: LessonSe
 
 
 @router.get("/progress/{child_id}")
-async def get_child_learning_progress(child_id: str, path_id: Optional[str] = Query(default=None), learning_service: LearningService = Depends(get_learning_service)):
-    progress = learning_service.get_child_path_progress(child_id, path_id) if path_id else learning_service.get_all_progress(child_id)
+async def get_child_learning_progress(child_id: str, path_id: Optional[str] = Query(default=None), domain: str = Query(default="environment"), learning_service: LearningService = Depends(get_learning_service)):
+    progress = learning_service.get_child_path_progress(child_id, path_id) if path_id else learning_service.get_all_progress(child_id, domain=domain)
     return JSONResponse(content={"success": True, "data": progress})
 
 

@@ -6,7 +6,14 @@ from ..core.config import settings
 from ..core.exceptions import ValidationException, AIServiceException
 from ..core.logging_config import get_logger
 from ..utils.learning_prompts import get_lesson_generation_prompt, get_exercise_generation_prompt
+from ..utils.health_prompts import (
+    HEALTH_CATEGORY_ORDER,
+    HEALTH_CATEGORY_META,
+    get_health_path_context,
+    get_health_lesson_generation_prompt,
+)
 from .gemini_client import GeminiClient
+from .health_progress import add_lesson_completed as _add_health_lesson_completed
 from ..repositories.memory_repository import MemoryRepository
 
 logger = get_logger(__name__)
@@ -19,7 +26,25 @@ class LearningService:
         self.memory = memory_repo
         logger.info("learning_service_initialized")
 
-    def get_learning_paths(self, language: str = "fr") -> List[Dict[str, Any]]:
+    def _resolve_domain(self, path_id: str, domain: Optional[str] = None) -> str:
+        if domain:
+            return domain
+        return "health" if path_id in HEALTH_CATEGORY_META else "environment"
+
+    def get_learning_paths(self, language: str = "fr", domain: str = "environment") -> List[Dict[str, Any]]:
+        if domain == "health":
+            paths = []
+            for index, slug in enumerate(HEALTH_CATEGORY_ORDER):
+                meta = HEALTH_CATEGORY_META[slug]
+                ctx = get_health_path_context(slug, language)
+                paths.append({
+                    "id": slug, "slug": slug,
+                    "name": ctx["name"], "description": ctx["description"],
+                    "emoji": meta["emoji"], "color": meta["color"],
+                    "total_units": 3, "progress": 0, "order_index": index,
+                })
+            return paths
+
         paths = [
             {"id": "biodiversity", "slug": "biodiversity", "name": self._t("Biodiversité", "Biodiversity", "Biodiversite", "Bioanuwai", language), "description": self._t("Découvre la richesse de la faune et la flore africaine", "Discover the richness of African wildlife and flora", "Découvrir richesse ya bikelamu mpe banzete ya Afrique", "Gundua utajiri wa wanyama na mimea ya Afrika", language), "emoji": "🌿", "color": "#2D9B6E", "total_units": 5, "progress": 0, "order_index": 0},
             {"id": "climate", "slug": "climate", "name": self._t("Climat", "Climate", "Climat", "Hali ya Hewa", language), "description": self._t("Comprends le changement climatique et ses impacts", "Understand climate change and its impacts", "Comprendre changement climatique mpe ba impacts na yango", "Elewa mabadiliko ya hali ya hewa na athari zake", language), "emoji": "🌍", "color": "#1B6CA8", "total_units": 5, "progress": 0, "order_index": 1},
@@ -28,8 +53,9 @@ class LearningService:
         ]
         return paths
 
-    def get_path_detail(self, path_id: str, language: str = "fr") -> Optional[Dict[str, Any]]:
-        paths = self.get_learning_paths(language)
+    def get_path_detail(self, path_id: str, language: str = "fr", domain: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        resolved_domain = self._resolve_domain(path_id, domain)
+        paths = self.get_learning_paths(language, domain=resolved_domain)
         for path in paths:
             if path["slug"] == path_id or path["id"] == path_id:
                 return path
@@ -42,7 +68,23 @@ class LearningService:
         except Exception:
             return {"total_lessons_completed": 0, "total_units_completed": 0, "total_tests_passed": 0, "total_points_earned": 0, "streak_days": 0, "overall_progress": 0}
 
-    def get_units_for_path(self, path_id: str, language: str = "fr") -> List[Dict[str, Any]]:
+    def get_units_for_path(self, path_id: str, language: str = "fr", domain: Optional[str] = None) -> List[Dict[str, Any]]:
+        resolved_domain = self._resolve_domain(path_id, domain)
+        if resolved_domain == "health":
+            ctx = get_health_path_context(path_id, language)
+            units_names = ctx.get("units", {})
+            return [
+                {
+                    "unit_number": n,
+                    "name": units_names.get(n, f"Unite {n}"),
+                    "description": ctx["description"],
+                    "total_lessons": 4, "required_score": 70,
+                    "is_locked": n != 1, "is_completed": False,
+                    "test_passed": False, "lessons_completed": 0,
+                }
+                for n in sorted(units_names.keys()) or [1, 2, 3]
+            ]
+
         all_units = {
             "biodiversity": [{"unit_number": 1, "name": self._t("Introduction à la Biodiversité", "Introduction to Biodiversity", "Introduction na Biodiversite", "Utangulizi wa Bioanuwai", language), "description": self._t("Les bases de la biodiversité", "Biodiversity basics", "Ba bases ya biodiversite", "Misingi ya bioanuwai", language), "total_lessons": 4, "required_score": 70, "is_locked": False, "is_completed": False, "test_passed": False, "lessons_completed": 0}, {"unit_number": 2, "name": self._t("Les Animaux d'Afrique", "African Animals", "Banyama ya Afrique", "Wanyama wa Afrika", language), "description": self._t("Découvre les animaux", "Discover animals", "Découvrir banyama", "Gundua wanyama", language), "total_lessons": 4, "required_score": 70, "is_locked": True, "is_completed": False, "test_passed": False, "lessons_completed": 0}, {"unit_number": 3, "name": self._t("Les Plantes et Arbres", "Plants and Trees", "Banzete mpe Matiti", "Mimea na Miti", language), "description": self._t("Le monde végétal", "The plant world", "Mokili ya banzete", "Ulimwengu wa mimea", language), "total_lessons": 4, "required_score": 70, "is_locked": True, "is_completed": False, "test_passed": False, "lessons_completed": 0}, {"unit_number": 4, "name": self._t("Les Insectes", "Insects", "Ba Insectes", "Wadudu", language), "description": self._t("Le monde des insectes", "The insect world", "Mokili ya ba insectes", "Ulimwengu wa wadudu", language), "total_lessons": 4, "required_score": 70, "is_locked": True, "is_completed": False, "test_passed": False, "lessons_completed": 0}, {"unit_number": 5, "name": self._t("Écosystèmes", "Ecosystems", "Ba Ecosystemes", "Mifumo ya Ikolojia", language), "description": self._t("Tout est connecté", "Everything is connected", "Nionso ezali connecté", "Kila kitu kimeunganishwa", language), "total_lessons": 4, "required_score": 70, "is_locked": True, "is_completed": False, "test_passed": False, "lessons_completed": 0}],
             "climate": [{"unit_number": 1, "name": self._t("Le Climat, c'est quoi ?", "What is Climate?", "Climat ezali nini ?", "Hali ya Hewa ni nini ?", language), "description": self._t("Comprendre le climat", "Understanding climate", "Comprendre climat", "Kuelewa hali ya hewa", language), "total_lessons": 4, "required_score": 70, "is_locked": False, "is_completed": False, "test_passed": False, "lessons_completed": 0}, {"unit_number": 2, "name": self._t("Le Réchauffement", "Global Warming", "Kozala na Moto", "Joto la Dunia", language), "description": self._t("Pourquoi la Terre chauffe", "Why the Earth warms", "Mpo na nini Mabele ezali kozala na moto", "Kwa nini Dunia inapata joto", language), "total_lessons": 4, "required_score": 70, "is_locked": True, "is_completed": False, "test_passed": False, "lessons_completed": 0}, {"unit_number": 3, "name": self._t("Les Conséquences", "The Consequences", "Ba Conséquences", "Athari", language), "description": self._t("Les impacts du changement", "The impacts of change", "Ba impacts ya changement", "Athari za mabadiliko", language), "total_lessons": 4, "required_score": 70, "is_locked": True, "is_completed": False, "test_passed": False, "lessons_completed": 0}, {"unit_number": 4, "name": self._t("Les Solutions", "Solutions", "Ba Solutions", "Ufumbuzi", language), "description": self._t("Ce qu'on peut faire", "What we can do", "Ce qu'on peut faire", "Tunachoweza kufanya", language), "total_lessons": 4, "required_score": 70, "is_locked": True, "is_completed": False, "test_passed": False, "lessons_completed": 0}, {"unit_number": 5, "name": self._t("Agir Ensemble", "Act Together", "Kosala Elongo", "Tenda Pamoja", language), "description": self._t("Ensemble pour la planète", "Together for the planet", "Elongo po na planete", "Pamoja kwa sayari", language), "total_lessons": 4, "required_score": 70, "is_locked": True, "is_completed": False, "test_passed": False, "lessons_completed": 0}],
@@ -72,8 +114,8 @@ class LearningService:
         except Exception:
             return {"lessons_completed": 0, "total_lessons": 4, "test_passed": False, "best_score": 0}
 
-    def get_all_progress(self, child_id: str) -> Dict[str, Any]:
-        paths = ["biodiversity", "climate", "disasters", "behaviors"]
+    def get_all_progress(self, child_id: str, domain: str = "environment") -> Dict[str, Any]:
+        paths = HEALTH_CATEGORY_ORDER if domain == "health" else ["biodiversity", "climate", "disasters", "behaviors"]
         return {path: self.get_child_path_progress(child_id, path) for path in paths}
 
     def get_streak_info(self, child_id: str) -> Dict[str, Any]:
@@ -97,11 +139,17 @@ class LearningService:
             unit_progress = {}
 
         completed_lessons: List[str] = unit_progress.get("completed_lesson_ids", [])
-        if lesson_id not in completed_lessons:
+        newly_completed = lesson_id not in completed_lessons
+        if newly_completed:
             completed_lessons.append(lesson_id)
             unit_progress["completed_lesson_ids"] = completed_lessons
             unit_progress["lessons_completed"] = len(completed_lessons)
             progress["lessons_completed"] = progress.get("lessons_completed", 0) + 1
+            if path_id in HEALTH_CATEGORY_META:
+                try:
+                    _add_health_lesson_completed(self.memory, child_id, score)
+                except Exception:
+                    logger.warning("health_progress_update_failed", child_id=child_id, path_id=path_id)
 
         unit_progress["best_score"] = max(unit_progress.get("best_score", 0), score)
         unit_progress["total_lessons"] = 4

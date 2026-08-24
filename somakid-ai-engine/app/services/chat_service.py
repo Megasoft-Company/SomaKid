@@ -101,6 +101,7 @@ class ChatService:
         child_age: int = 8,
         child_id: Optional[str] = None,
         conversation_history: Optional[List[Dict[str, str]]] = None,
+        domain: str = "environment",
     ) -> Tuple[ChatReponse, List[Dict[str, str]]]:
         """Process a child's message and return the AI tutor's response."""
         self._validate_inputs(message, language, child_age)
@@ -139,6 +140,7 @@ class ChatService:
             child_age=child_age,
             conversation_history=normalized_history[-self.MAX_HISTORY_MESSAGES:],
             message_type=message_type,
+            domain=domain,
         )
         full_prompt = f'{prompt}\n\nThe child says: "{clean_message}"'
 
@@ -153,10 +155,10 @@ class ChatService:
                     response_data = self.gemini.extract_json_from_response(raw_response)
                 except Exception as groq_error:
                     logger.warning("groq_fallback_failed_using_static_fallback", error=str(groq_error))
-                    response_data = get_fallback_chat_response(language, "chat_error")
+                    response_data = get_fallback_chat_response(language, "chat_error", domain=domain)
             else:
                 logger.warning("chat_generation_failed_using_fallback", error=str(gemini_error))
-                response_data = get_fallback_chat_response(language, "chat_error")
+                response_data = get_fallback_chat_response(language, "chat_error", domain=domain)
 
         soma_response = self._build_response(response_data)
         updated_history = self._update_history(
@@ -169,6 +171,9 @@ class ChatService:
             asyncio.create_task(
                 self._save_conversation_async(session_id, child_id, updated_history)
             )
+        if domain == "health":
+            import asyncio
+            asyncio.create_task(self._log_health_question_async(clean_message))
 
         logger.info(
             "chat_message_processed",
@@ -202,8 +207,41 @@ class ChatService:
         session_data = self.memory.load_progress(session_id)
         return session_data.get("messages", [])[-limit:]
 
-    def get_quick_questions(self, language: str = "fr") -> List[str]:
+    def get_quick_questions(self, language: str = "fr", domain: str = "environment") -> List[str]:
         """Return a list of quick-start questions for the given language."""
+        if domain == "health":
+            health_questions = {
+                "fr": [
+                    "Pourquoi faut-il se laver les mains ?",
+                    "Comment éviter le paludisme ?",
+                    "Pourquoi se brosser les dents ?",
+                    "Pourquoi boire de l'eau potable ?",
+                    "Que faire lorsqu'on se blesse ?",
+                ],
+                "en": [
+                    "Why do we need to wash our hands?",
+                    "How can I avoid malaria?",
+                    "Why brush your teeth?",
+                    "Why drink clean water?",
+                    "What to do when you get hurt?",
+                ],
+                "ln": [
+                    "Mpo na nini esengeli kosukola maboko ?",
+                    "Ndenge nini tokoki koboya paludisme ?",
+                    "Mpo na nini esengeli kosukola minu ?",
+                    "Mpo na nini esengeli komela mai ya peto ?",
+                    "Nini esengeli kosala soki tozoki mpota ?",
+                ],
+                "sw": [
+                    "Kwa nini tunapaswa kunawa mikono?",
+                    "Jinsi gani ya kuepuka malaria?",
+                    "Kwa nini kupiga mswaki?",
+                    "Kwa nini kunywa maji safi?",
+                    "Nifanye nini nikijeruhiwa?",
+                ],
+            }
+            return health_questions.get(language, health_questions["fr"])
+
         questions = {
             "fr": [
                 "Qu'est-ce que le changement climatique ?",
@@ -306,3 +344,15 @@ class ChatService:
             self.memory.save_progress(session_id, updated_data)
         except Exception as e:
             log_error(logger, "Failed to save conversation", exception=e)
+
+    async def _log_health_question_async(self, question_text: str) -> None:
+        """Append a health-domain question to a rolling log for analytics (most-asked questions)."""
+        try:
+            key = "health_chat_questions_log"
+            data = self.memory.load_progress(key)
+            questions: List[str] = data.get("questions", [])
+            questions.append(question_text[:200])
+            data["questions"] = questions[-500:]
+            self.memory.save_progress(key, data)
+        except Exception as e:
+            log_error(logger, "Failed to log health question", exception=e)

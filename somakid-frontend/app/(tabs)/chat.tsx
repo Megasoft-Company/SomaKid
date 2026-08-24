@@ -19,6 +19,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLocalSearchParams } from 'expo-router';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { 
   startRecording, 
@@ -267,6 +268,8 @@ function TypingIndicator({ t }: { t: (key: string) => string }) {
 
 export default function ChatScreen() {
   const { t } = useTranslation();
+  const params = useLocalSearchParams<{ domain?: string }>();
+  const domain: 'environment' | 'health' = params.domain === 'health' ? 'health' : 'environment';
   const [appState, setAppState] = useState<AppState>('idle');
   const [mode, setMode] = useState<Mode>('voice');
   const [textInput, setTextInput] = useState('');
@@ -286,6 +289,11 @@ export default function ChatScreen() {
   const storeSending = useChatStore((s) => s.isSending);
   const sendImage = useChatStore((s) => s.sendImage);
   const sendMessage = useChatStore((s) => s.sendMessage);
+  const setDomain = useChatStore((s) => s.setDomain);
+
+  useEffect(() => {
+    setDomain(domain);
+  }, [domain, setDomain]);
 
   // Vérifier périodiquement si l'audio joue encore
   useEffect(() => {
@@ -404,6 +412,7 @@ export default function ChatScreen() {
               message: transcription.trim(),
               langue: rawLang,
               identifiant_session: sessionId,
+              domain,
               historique: messages.slice(-10).map(m => ({ role: m.role, content: m.text })),
             },
           );

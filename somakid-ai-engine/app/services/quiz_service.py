@@ -44,13 +44,21 @@ _RESULT_MESSAGES = {
 }
 
 
+HEALTH_SUBJECTS = {
+    "hygiene_corporelle", "hygiene_bucco_dentaire", "lavage_mains", "nutrition",
+    "sante_reproductive_ado", "hygiene_menstruelle", "prevention_infections",
+    "vaccination", "premiers_secours", "sante_mentale", "eau_potable",
+    "prevention_maladies", "sante_maternelle_infantile", "activite_physique",
+}
+
+
 class QuizService:
     VALID_SUBJECTS = {
         "biodiversity", "biodiversite",
         "climate", "climat",
         "disasters", "catastrophes",
         "behaviors", "comportements",
-    }
+    } | HEALTH_SUBJECTS
     POINTS_MULTIPLIER = {1: 10, 2: 15, 3: 20, 4: 25, 5: 30}
 
     def __init__(self, gemini_client: GeminiClient, memory_repo: MemoryRepository):
@@ -69,9 +77,11 @@ class QuizService:
         language: str = "fr",
         session_id: Optional[str] = None,
         previous_questions: Optional[List[str]] = None,
+        domain: Optional[str] = None,
     ) -> QuestionQuiz:
         """Generate a new quiz question in the requested language."""
         self._validate_generation_inputs(subject, level, language)
+        effective_domain = domain or ("health" if subject in HEALTH_SUBJECTS else "environment")
 
         # Load previously asked question TEXTS from session memory
         session_previous = self._load_previous_question_texts(session_id) if session_id else []
@@ -85,6 +95,7 @@ class QuizService:
             subject=subject,
             level=level,
             previous_questions=combined,
+            domain=effective_domain,
         )
 
         try:
@@ -92,7 +103,7 @@ class QuizService:
             result_data = self.gemini.extract_json_from_response(raw_response)
         except AIServiceException:
             logger.warning("quiz_generation_failed_using_fallback")
-            result_data = get_fallback_quiz_response(language, "quiz_error")
+            result_data = get_fallback_quiz_response(language, "quiz_error", domain=effective_domain)
 
         question = self._build_question(result_data, subject, level, language)
 
@@ -148,8 +159,77 @@ class QuizService:
         logger.info("quiz_answer_validated", correct=is_correct, points_earned=points_earned)
         return result
 
-    def get_available_subjects(self, language: str = "fr") -> List[Dict[str, Any]]:
+    def get_available_subjects(self, language: str = "fr", domain: str = "environment") -> List[Dict[str, Any]]:
         """Return available quiz subjects in the requested language."""
+        if domain == "health":
+            health_subjects = {
+                "fr": [
+                    {"id": "hygiene_corporelle", "name": "Hygiene Corporelle", "emoji": "🧼", "color": "#2AA9B8"},
+                    {"id": "hygiene_bucco_dentaire", "name": "Hygiene Bucco-Dentaire", "emoji": "🦷", "color": "#3FB8A0"},
+                    {"id": "lavage_mains", "name": "Lavage des Mains", "emoji": "🖐️", "color": "#2AA9B8"},
+                    {"id": "nutrition", "name": "Nutrition Equilibree", "emoji": "🍎", "color": "#E4A62B"},
+                    {"id": "vaccination", "name": "Vaccination", "emoji": "💉", "color": "#5B7FDB"},
+                    {"id": "premiers_secours", "name": "Premiers Secours", "emoji": "🩹", "color": "#D9534F"},
+                    {"id": "sante_mentale", "name": "Sante Mentale et Bien-etre", "emoji": "🧠", "color": "#8B5CF6"},
+                    {"id": "eau_potable", "name": "Eau Potable et Assainissement", "emoji": "💧", "color": "#1B9AA0"},
+                    {"id": "prevention_maladies", "name": "Prevention des Maladies", "emoji": "🛡️", "color": "#D9534F"},
+                    {"id": "activite_physique", "name": "Activite Physique", "emoji": "🏃", "color": "#E4A62B"},
+                    {"id": "prevention_infections", "name": "Prevention des Infections", "emoji": "🦠", "color": "#5B7FDB"},
+                    {"id": "hygiene_menstruelle", "name": "Hygiene Menstruelle", "emoji": "🌸", "color": "#D46FB0"},
+                    {"id": "sante_reproductive_ado", "name": "Sante Reproductive Ado", "emoji": "🌱", "color": "#3FB8A0"},
+                    {"id": "sante_maternelle_infantile", "name": "Sante Maternelle et Infantile", "emoji": "👶", "color": "#E4A62B"},
+                ],
+                "en": [
+                    {"id": "hygiene_corporelle", "name": "Body Hygiene", "emoji": "🧼", "color": "#2AA9B8"},
+                    {"id": "hygiene_bucco_dentaire", "name": "Dental Hygiene", "emoji": "🦷", "color": "#3FB8A0"},
+                    {"id": "lavage_mains", "name": "Handwashing", "emoji": "🖐️", "color": "#2AA9B8"},
+                    {"id": "nutrition", "name": "Balanced Nutrition", "emoji": "🍎", "color": "#E4A62B"},
+                    {"id": "vaccination", "name": "Vaccination", "emoji": "💉", "color": "#5B7FDB"},
+                    {"id": "premiers_secours", "name": "First Aid", "emoji": "🩹", "color": "#D9534F"},
+                    {"id": "sante_mentale", "name": "Mental Health & Well-being", "emoji": "🧠", "color": "#8B5CF6"},
+                    {"id": "eau_potable", "name": "Clean Water & Sanitation", "emoji": "💧", "color": "#1B9AA0"},
+                    {"id": "prevention_maladies", "name": "Disease Prevention", "emoji": "🛡️", "color": "#D9534F"},
+                    {"id": "activite_physique", "name": "Physical Activity", "emoji": "🏃", "color": "#E4A62B"},
+                    {"id": "prevention_infections", "name": "Infection Prevention", "emoji": "🦠", "color": "#5B7FDB"},
+                    {"id": "hygiene_menstruelle", "name": "Menstrual Hygiene", "emoji": "🌸", "color": "#D46FB0"},
+                    {"id": "sante_reproductive_ado", "name": "Teen Reproductive Health", "emoji": "🌱", "color": "#3FB8A0"},
+                    {"id": "sante_maternelle_infantile", "name": "Maternal & Child Health", "emoji": "👶", "color": "#E4A62B"},
+                ],
+                "ln": [
+                    {"id": "hygiene_corporelle", "name": "Hygiene ya Nzoto", "emoji": "🧼", "color": "#2AA9B8"},
+                    {"id": "hygiene_bucco_dentaire", "name": "Hygiene ya Minu", "emoji": "🦷", "color": "#3FB8A0"},
+                    {"id": "lavage_mains", "name": "Kosukola Maboko", "emoji": "🖐️", "color": "#2AA9B8"},
+                    {"id": "nutrition", "name": "Nutrition ya Malamu", "emoji": "🍎", "color": "#E4A62B"},
+                    {"id": "vaccination", "name": "Vaccination", "emoji": "💉", "color": "#5B7FDB"},
+                    {"id": "premiers_secours", "name": "Premiers Secours", "emoji": "🩹", "color": "#D9534F"},
+                    {"id": "sante_mentale", "name": "Sante ya Makanisi", "emoji": "🧠", "color": "#8B5CF6"},
+                    {"id": "eau_potable", "name": "Mai ya Peto", "emoji": "💧", "color": "#1B9AA0"},
+                    {"id": "prevention_maladies", "name": "Prevention ya Maladies", "emoji": "🛡️", "color": "#D9534F"},
+                    {"id": "activite_physique", "name": "Sport na Nzoto", "emoji": "🏃", "color": "#E4A62B"},
+                    {"id": "prevention_infections", "name": "Prevention ya Infections", "emoji": "🦠", "color": "#5B7FDB"},
+                    {"id": "hygiene_menstruelle", "name": "Hygiene ya Sanza", "emoji": "🌸", "color": "#D46FB0"},
+                    {"id": "sante_reproductive_ado", "name": "Sante Reproductive ya Elenge", "emoji": "🌱", "color": "#3FB8A0"},
+                    {"id": "sante_maternelle_infantile", "name": "Sante ya Mama na Mwana", "emoji": "👶", "color": "#E4A62B"},
+                ],
+                "sw": [
+                    {"id": "hygiene_corporelle", "name": "Usafi wa Mwili", "emoji": "🧼", "color": "#2AA9B8"},
+                    {"id": "hygiene_bucco_dentaire", "name": "Usafi wa Meno", "emoji": "🦷", "color": "#3FB8A0"},
+                    {"id": "lavage_mains", "name": "Kunawa Mikono", "emoji": "🖐️", "color": "#2AA9B8"},
+                    {"id": "nutrition", "name": "Lishe Bora", "emoji": "🍎", "color": "#E4A62B"},
+                    {"id": "vaccination", "name": "Chanjo", "emoji": "💉", "color": "#5B7FDB"},
+                    {"id": "premiers_secours", "name": "Huduma ya Kwanza", "emoji": "🩹", "color": "#D9534F"},
+                    {"id": "sante_mentale", "name": "Afya ya Akili na Ustawi", "emoji": "🧠", "color": "#8B5CF6"},
+                    {"id": "eau_potable", "name": "Maji Safi na Usafi wa Mazingira", "emoji": "💧", "color": "#1B9AA0"},
+                    {"id": "prevention_maladies", "name": "Kinga ya Magonjwa", "emoji": "🛡️", "color": "#D9534F"},
+                    {"id": "activite_physique", "name": "Mazoezi ya Mwili", "emoji": "🏃", "color": "#E4A62B"},
+                    {"id": "prevention_infections", "name": "Kinga ya Maambukizi", "emoji": "🦠", "color": "#5B7FDB"},
+                    {"id": "hygiene_menstruelle", "name": "Usafi wa Hedhi", "emoji": "🌸", "color": "#D46FB0"},
+                    {"id": "sante_reproductive_ado", "name": "Afya ya Uzazi kwa Vijana", "emoji": "🌱", "color": "#3FB8A0"},
+                    {"id": "sante_maternelle_infantile", "name": "Afya ya Mama na Mtoto", "emoji": "👶", "color": "#E4A62B"},
+                ],
+            }
+            return health_subjects.get(language, health_subjects["fr"])
+
         subjects = {
             "fr": [
                 {"id": "biodiversity", "name": "Biodiversite",              "emoji": "🌿", "color": "#2D9B6E"},

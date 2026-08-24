@@ -7,7 +7,9 @@
     "icon": "./assets/images/icon.png",
     "scheme": "somakid",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
@@ -16,12 +18,10 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "ai.somakid.app",
-      "buildNumber": "1",
-      "deploymentTarget": "15.1",
       "infoPlist": {
-        "NSCameraUsageDescription": "SOMAKID AI uses the camera to identify plants and animals in your environment.",
-        "NSMicrophoneUsageDescription": "SOMAKID AI uses the microphone for voice interactions with the AI tutor.",
-        "NSPhotoLibraryUsageDescription": "SOMAKID AI accesses your photos for species identification."
+        "NSCameraUsageDescription": "SOMAKID uses the camera to scan documents and capture images for learning activities.",
+        "NSMicrophoneUsageDescription": "SOMAKID uses the microphone for voice-based learning interactions.",
+        "NSPhotoLibraryUsageDescription": "SOMAKID accesses your photo library to upload images for educational content."
       }
     },
     "android": {
@@ -30,6 +30,7 @@
         "backgroundColor": "#0F5038"
       },
       "package": "ai.somakid.app",
+      "versionCode": 3,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
@@ -47,7 +48,34 @@
     "plugins": [
       "expo-router",
       "expo-font",
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "SOMAKID uses the camera to scan documents and capture images for learning activities.",
+          "microphonePermission": "SOMAKID uses the microphone for voice-based learning interactions.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SOMAKID accesses your photo library to upload images for educational content."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "buildToolsVersion": "35.0.0"
+          },
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

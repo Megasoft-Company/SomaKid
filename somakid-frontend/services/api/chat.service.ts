@@ -57,7 +57,7 @@ export const ChatService = {
   async sendMessage(request: ChatSendRequest): Promise<{ response: ChatResponse; historyLength: number }> {
     const response = await aiEngineClient.post<ApiResponse<ChatMessageApiResponse> & { history_length: number }>(
       '/chat/message',
-      { message: request.message, langue: request.language, identifiant_session: request.sessionId, historique: request.history || [] },
+      { message: request.message, langue: request.language, identifiant_session: request.sessionId, historique: request.history || [], domain: request.domain || 'environment' },
     );
     const data = response.data.data;
     const mainResponse = data.reponse || data.response || '';

@@ -61,6 +61,7 @@ export const Colors = {
     academy: '#1B6CA8',
     quiz: '#E8921A',
     chat: '#8B5CF6',
+    health: '#2AA9B8',
   },
 
   // Level colors
